@@ -140,6 +140,8 @@ export function excerpt(s: string, n: number): string {
         // 先收 `[[双链]]` 的方括号，否则下面那条 `[文字](链接)` 规则匹配不到它
         .replace(/\[\[([^[\]\n]+)\]\]/g, '$1')
         .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        // 只收成对的 `==`：单个 `=` 是正文（`a = b`），不能一起删掉
+        .replace(/==/g, '')
         .replace(/[*_`~]/g, '')
         .replace(/\s+/g, ' ')
         .trim();

@@ -1023,6 +1023,8 @@ function runSmoke() {
         // 第 44 轮：新建笔记继承当前选中的目录/标签；回车把 Markdown 前缀带到下一行
         let newNoteCtxOk = false;
         let enterOk = false;
+        // 第 45 轮：`==高亮==`
+        let hlOk = false;
 
         // 设置面板：必须在「什么都没选中」的状态下用真鼠标点。
         // 这个状态下右栏是铺满整列的 .blank 占位元素。它一旦被标成
@@ -2598,6 +2600,36 @@ function runSmoke() {
           }));
           enterOk = typed === 'ok' && keysOk && body.endsWith(want);
 
+          // (d) `==高亮==`：光标离开这一行之后要变成淡色底，并且把两对 `==` 收起来。
+          // 先把上一行清空，腾一个干净的段落出来
+          await pressEnter();
+          await wait(300);
+          await typeText('==重点==');
+          await wait(400);
+          await js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            if (!c) return;
+            c.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'ArrowUp', code: 'ArrowUp', keyCode: 38, bubbles: true, cancelable: true
+            }));
+          })()`);
+          await wait(400);
+
+          const hl = await js(`(() => {
+            const el = document.querySelector('#editor-host .cm-hl');
+            if (!el) return null;
+            const line = el.closest('.cm-line');
+            return {
+              text: el.textContent,
+              bg: getComputedStyle(el).backgroundColor,
+              line: line ? line.textContent : ''
+            };
+          })()`);
+          console.log('SMOKE hl=' + JSON.stringify(hl));
+          // 底色不能是透明的，否则「高亮」等于没生效
+          hlOk = !!hl && hl.text === '重点' && !hl.line.includes('==')
+            && !!hl.bg && hl.bg !== 'rgba(0, 0, 0, 0)' && hl.bg !== 'transparent';
+
           // 测试笔记别留在副本里（--demo 会重新播种，但真实库副本要干净）
           for (const p of [folderFile, editFile]) {
             if (!p) continue;
@@ -2614,13 +2646,13 @@ function runSmoke() {
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
-          && railOk && newNoteCtxOk && enterOk;
+          && railOk && newNoteCtxOk && enterOk && hlOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
-          newNoteCtxOk, enterOk
+          newNoteCtxOk, enterOk, hlOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {

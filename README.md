@@ -171,6 +171,9 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 **Writing notes**
 - The `新建笔记` (New note) button at the top right of the middle pane — or `Ctrl/Cmd + N` — starts a note. The title is the first `# Heading` line of the body.
 - Typing `# `, `- `, `- [ ] `, `> `, `**bold**`, `` `code` `` immediately renders into the corresponding style.
+- `==highlight==` gives a soft marker-pen band behind the text. It's a per-theme colour, deliberately a different hue from
+  the italic band and from the yellow search hit, so the three don't get confused. `Ctrl/Cmd + Shift + H` or the
+  highlighter button in the quick bar wraps the selection.
 - When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
 - **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
   Enter starts the next line with the same marker: ordered lists increment, new todos always start unchecked, indentation
@@ -182,7 +185,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 
 **Bottom quick bar**
 - A floating toolbar sits at the bottom of the editor so you don't have to remember syntax. It floats over the text rather than taking up layout space (the body already leaves room at the bottom).
-- The left group is inline formatting: bold / italic / strikethrough / inline code / link.
+- The left group is inline formatting: bold / italic / strikethrough / highlight / inline code / link.
 - The right group is block elements: image / heading / list / todo / quote / table / divider.
 - With a selection, the format wraps the selection; clicking the same button again removes it. With no selection, it inserts a pair of markers and puts the cursor in between.
 - The heading button cycles: body → `##` → `###` → body.

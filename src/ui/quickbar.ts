@@ -45,6 +45,12 @@ const CMDS: (Cmd | null)[] = [
     run: v => toggleWrap(v, '~~', '~~', '删除线')
   },
   {
+    id: 'hl',
+    title: '高亮  Ctrl+Shift+H',
+    icon: svg(`<rect x="2.6" y="6.2" width="10.8" height="3.6" rx="1.2" fill="currentColor" opacity=".26"/><path d="M4.6 4.4h6.8M4.6 12.2h4.4" ${stroke}/>`),
+    run: v => toggleWrap(v, '==', '==', '高亮')
+  },
+  {
     id: 'code',
     title: '行内代码',
     icon: svg(`<path d="M5.6 4.7L2.3 8l3.3 3.3M10.4 4.7L13.7 8l-3.3 3.3" ${stroke}/>`),

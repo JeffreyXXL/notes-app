@@ -1009,6 +1009,18 @@ const RULES: Rule[] = [
       mark(t0, t1, 'cm-code');
     }
   },
+  // `==高亮==`。开头不许是空白，免得把 `a == b == c` 这种比较式当成高亮；
+  // 正文里 `=` 不能出现在内容中间，所以中间也排除掉
+  {
+    re: /==([^=\s][^=\n]*?)==/g,
+    apply(m, { mark, cut }) {
+      const t0 = m.index + 2;
+      const t1 = t0 + m[1].length;
+      cut(m.index, t0);
+      cut(t1, m.index + m[0].length);
+      mark(t0, t1, 'cm-hl');
+    }
+  },
   {
     re: /\*\*([^*]+)\*\*/g,
     apply(m, { mark, cut }) {

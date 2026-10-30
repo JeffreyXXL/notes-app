@@ -127,6 +127,10 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 /* `[[另一篇笔记]]` 和普通外链区分一下：加一层很淡的底，一眼看出是站内跳转 */
 .cm-wikilink{background:var(--sel-bg);border-radius:3px;padding:0 2px;border-bottom-style:dotted}
 .cm-strike{text-decoration:line-through;color:var(--t4)}
+/* `==高亮==`：整块淡色底，像马克笔划过去。
+   斜体那条也是淡色底，所以这里用另一个色相（--mark），两者一眼能分开 */
+.cm-hl{background:var(--mark);border-radius:3px;padding:1px 2px;
+  box-shadow:0 0 0 1px var(--mark);color:var(--t1)}
 .cm-bullet{color:var(--t4);padding-right:8px;font-size:15px}
 .cm-hit{background:var(--hl-hit);border-radius:2px;box-shadow:0 0 0 1px var(--hl-hit)}
 .cm-olnum{color:var(--t4)}
