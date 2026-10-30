@@ -995,6 +995,18 @@ function runSmoke() {
         const js = s => win.webContents.executeJavaScript(s);
         const wait = ms => new Promise(r => setTimeout(r, ms));
 
+        // 等笔记库真的渲染完再断言。--demo 每次启动都要重播一遍演示库，
+        // 磁盘慢的时候卡片是一张张冒出来的，太早读会拿到「只有一张卡」的
+        // 中间态 —— previewOk 偶发挂掉就是这么来的。连续三次数量不变才算稳
+        let stable = 0;
+        let lastN = -1;
+        for (let i = 0; i < 40 && stable < 3; i++) {
+          const n = Number(await js("document.querySelectorAll('.swipe').length"));
+          stable = n === lastN && n > 0 ? stable + 1 : 0;
+          lastN = n;
+          if (stable < 3) await wait(250);
+        }
+
         const cards = await js("document.querySelectorAll('.swipe').length");
         const title = await js("document.getElementById('mid-title').textContent");
         const bridge = await js("typeof window.notesBridge");
