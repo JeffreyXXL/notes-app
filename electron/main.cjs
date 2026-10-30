@@ -1853,7 +1853,15 @@ function runSmoke() {
               { bubbles: true, cancelable: true, button: 0 }));
             return 'sent';
           })()`);
-          await wait(500);
+
+          // 别只等一个固定时长：写完宽度之后编辑器可能正在重建，500ms 正好撞上
+          // 「旧视图已销毁、新视图还没渲染」的空窗，会读到 0/0 而误判失败。
+          // 轮询到源码态出现为止（双击没生效的话就一直是 1/0，断言照样会挂）
+          for (let i = 0; i < 12; i++) {
+            await wait(250);
+            const n = Number(await js("document.querySelectorAll('#editor-host .cm-imgline').length"));
+            if (n > 0) break;
+          }
 
           const after = await js("document.querySelectorAll('.cm-img').length + '/' +"
             + " document.querySelectorAll('#editor-host .cm-imgline').length");
