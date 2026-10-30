@@ -1,477 +1,486 @@
-# 笔记 · 桌面版
+# Notes · Desktop
 
-> **下载**：[v0.1.0 · Windows x64](https://github.com/JeffreyXXL/notes-app/releases/latest)
-> —— 解压后双击 `Notes.exe`，不用装 Node、不用命令行、不联网。
+**English** · [简体中文](README.zh-CN.md)
 
-三栏 Markdown 笔记应用。前端是 **Vite + TypeScript + CodeMirror 6**（无框架，手写原生 DOM），桌面外壳做了两套，共用同一份前端、同一套命令契约、同一个笔记库目录：
+> **Download**: [v0.1.0 · Windows x64](https://github.com/JeffreyXXL/notes-app/releases/latest)
+> — unzip and double-click `Notes.exe`. No Node, no command line, no network.
 
-| 外壳 | 体积 | 编译要求 | 现状 |
+A three-pane Markdown note app. The front end is **Vite + TypeScript + CodeMirror 6** (no framework, hand-written DOM), and there are two desktop shells sharing the same front end, the same command contract, and the same vault directory:
+
+| Shell | Size | Build requirements | Status |
 | --- | --- | --- | --- |
-| **Electron** | 打包后 278MB | 无，装完 npm 就能跑 | ✅ 已打包并验证可运行 |
-| **Tauri 2** | 约 8MB | 需要 Rust + Windows 10/11 SDK | 源码完整，待编译 |
+| **Electron** | 278 MB packaged | None — `npm install` and go | ✅ Packaged and verified running |
+| **Tauri 2** | ~8 MB | Rust + Windows 10/11 SDK | Source complete, not yet compiled |
 
-选 Electron 是因为它不需要编译器，装上依赖就能出窗口；Tauri 版留着，等机器上装了 Rust 随时切，笔记和设置完全通用。
+Electron was picked because it needs no compiler: install dependencies and you get a window. The Tauri shell stays in the repo so it can be switched to whenever a machine has Rust — notes and settings are fully interchangeable.
 
-界面：左栏分类（目录 / 标签 / 分组 + 归档 + 已隐藏 + 废纸篓）、中栏卡片列表（左滑操作 / 单击 `···` 唤出菜单 / 拖拽调顺序）、右栏整篇连续编辑并实时渲染 Markdown 与图片。
+The interface: left pane for navigation (folders / tags / groups, plus Archive, Hidden and Trash), middle pane for the card list (swipe actions, click `···` for the menu, drag to reorder), right pane for continuous editing with live-rendered Markdown and images.
 
-左上角的名字、色系、字体、密码锁定都能在设置里改；锁屏是一层盖在界面上的密码框，不是文件加密。
+The name in the top-left corner, the color scheme, the font and password lock are all configurable in Settings. The lock screen is a password prompt drawn over the UI — not file encryption.
 
-窗口是无边框的，系统标题栏已去掉，右上角的 `— □ ✕` 是自绘的（拖动窗口直接拖三栏顶部的空白处，双击顶部空白 = 最大化/还原）。
+The window is frameless: the system title bar is gone and the `— □ ✕` buttons at top right are drawn by the app. Drag the window by the empty strip along the top of the three panes; double-click that strip to maximize/restore.
 
-![桌面窗口](docs/desktop-window.png)
+![Desktop window](docs/desktop-window.png)
 
-<sub>图是真实 Electron 窗口里截的（`npm run desktop:shots` 自动生成），不是浏览器预览。
-库里的笔记是**虚构的演示数据**——产品方向、读书笔记、采购清单这类，一个真实项目名都没有。</sub>
+<sub>Screenshots are captured from a real Electron window (`npm run desktop:shots` generates them), not from a browser preview.
+The notes in them are **fictional demo data** — product notes, reading notes, a shopping list. No real project names.</sub>
 
-再放两张（暗色、卡片多图）：
+Two more (dark theme, multi-image cards):
 
-![暗色](docs/scheme-graphite-dark.png)
+![Dark theme](docs/scheme-graphite-dark.png)
 
-![卡片多图](docs/card-multi.png)
+![Multi-image cards](docs/card-multi.png)
 
 ---
 
-## 0. 怎么用
+## 0. Getting started
 
-### 最快：双击已经打好的 exe
+### Fastest: double-click the prebuilt exe
 
 ```
 dist-app\Notes-win32-x64\Notes.exe
 ```
 
-就这样，没有别的步骤。不需要 Node、不需要命令行、不联网、不弹浏览器。
+That's it. No Node, no command line, no network, no browser tab.
 
-### 直接跑起来（不用装任何编译器）
+### Run from source (no compiler needed)
 
 ```powershell
-# 路径里有空格的话，必须加引号
+# quote the path if it contains spaces
 cd notes-app
 npm install
 npm run desktop
 ```
 
-会打开一个独立窗口，没有地址栏、没有浏览器外壳。首次启动会在 `%APPDATA%\com.notesapp.desktop\vault` 写入 10 篇示例笔记。
+An independent window opens — no address bar, no browser chrome. On first launch it writes 10 sample notes into `%APPDATA%\com.notesapp.desktop\vault`.
 
-### 打包成可以双击的 exe
+### Build a double-clickable exe
 
 ```bash
 npm run desktop:pack
 ```
 
-产物在 `dist-app\Notes-win32-x64\Notes.exe`（实测 278MB，其中 Electron 运行时本身 181MB、你的代码和字体 10.4MB）。
-双击即用，不依赖 Node、不联网、不起端口。整个 `Notes-win32-x64` 文件夹可以整体拷到别的 Windows 机器上直接用。
+The output lands in `dist-app\Notes-win32-x64\Notes.exe` (278 MB measured — 181 MB of that is the Electron runtime, 10.4 MB is your code and fonts).
+Double-click and go: no Node dependency, no network, no listening port. The whole `Notes-win32-x64` folder can be copied to another Windows machine and used as-is.
 
-> 如果打包时旧版 `Notes.exe` 还开着，脚本不会去覆盖（会写坏文件），
-> 而是自动输出到 `dist-app-2\`，并在控制台说明。关掉旧窗口后重新打包就会回到 `dist-app\`。
+> If an older `Notes.exe` is still running during packaging, the script will not overwrite it (that corrupts the file).
+> It writes to `dist-app-2\` instead and says so in the console. Close the old window and re-pack to get back to `dist-app\`.
 
-> 想放到桌面：右键 `Notes.exe` → 发送到 → 桌面快捷方式。
-> 别只拷 `Notes.exe` 一个文件，它旁边那些 `.dll` 和 `resources\` 是运行必需的。
+> To put it on the desktop: right-click `Notes.exe` → Send to → Desktop (create shortcut).
+> Don't copy `Notes.exe` on its own — the `.dll` files and the `resources\` folder next to it are required.
 
-### 开发调试（浏览器热更新，改代码最快）
+### Development (browser hot reload — fastest iteration)
 
 ```bash
 npm run dev
 ```
 
-浏览器打开 `http://localhost:1420`。数据存在 localStorage，功能完整，只是不落真实文件。
+Open `http://localhost:1420`. Data lives in localStorage; every feature works, it just doesn't touch real files.
 
-> `1420` 是 **Vite 开发服务器**（只监听本机，用来提供页面 + 热更新），不是后端服务。
-> `npm run desktop` 打包后完全不需要它：前端资源被编进 asar，Electron 通过自定义协议 `app://` 从本地读，
-> 不联网、不起端口、没有数据库进程。
+> `1420` is the **Vite dev server** (bound to localhost, serving the page and hot reload) — not a backend.
+> `npm run desktop` doesn't need it at all: front-end assets are bundled into the asar and Electron reads them
+> through a custom `app://` protocol. No network, no port, no database process.
 
-### 自检
+### Self-check
 
 ```bash
-npm run test:io        # 12 个文件读写单元测试（路径穿越、原子写、空目录回收、图片落盘…）
-npm run desktop:smoke  # 无头启动真实窗口，检查 DOM / 桥接 / 落盘，并截图
-npm run desktop:shots  # 同上，但笔记库换成虚构的演示数据，专门用来生成 README 的图
+npm run test:io        # 12 file I/O unit tests (path traversal, atomic writes, empty-dir cleanup, image writes…)
+npm run desktop:smoke  # headless real window: checks DOM / bridge / disk, and takes screenshots
+npm run desktop:shots  # same, but against a fictional demo vault — this is what generates the README images
 ```
 
-> **截图用的是演示库，不是你的笔记。** `--demo` 会把笔记库指到临时目录里一套
-> 现编的笔记（产品方向、读书笔记、采购清单、旅行计划…），一个真实项目名、
-> 客户名都没有。以前截图是复制用户真实库跑出来的，左栏全是客户目录、
-> 卡片里是现场照片——那种图一旦跟着仓库发出去就等于泄露，所以彻底换掉了。
+> **The screenshots use a demo vault, not your notes.** `--demo` points the vault at a set of
+> invented notes in a temp directory (product notes, reading notes, a shopping list, a travel plan…).
+> No real project or client names. Screenshots used to be taken against a copy of the real vault,
+> which meant the sidebar was full of client folder names and the cards held site photos —
+> shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` 会真的点一遍再退出：真鼠标点设置面板的关闭按钮和右栏开关 → 点卡片 → 截图 → 单击表格进编辑 → 点别处变回表格 → 点快捷栏粗体再撤销 → 单击 `···` 展开操作条 → 切三套色系 × 明暗各截一张图 → 标签多选 → 目录重命名（改完再改回来）→ 置顶标志 → 拖拽排序（拖完再拖回来）→ 图片渲染 → 单击只选中 → 点 50% 预设 → 拖把手加宽 → 缩到 25% → 双击进源码 → 粘贴落盘 → 卡片预览（无空白卡 + 缩略图 + CRLF 摘要）→ 代码块高亮 + 单击不动 + 双击进源码 → 点站内链接跳转 → 待办解决方式 → 卡片目录路径逐级变短 → 左栏目录拖拽排序 → 目录改名后旧目录被收走 → 改标题后文件改名 → 启动时把「无标题」这类占位符文件名对齐成标题 → 右键隐藏 / 已隐藏里取消隐藏 → 改应用名 → 卡片图独占一行 + 多图并排 → 设密码 / 锁定 / 错密码被挡 / 对密码放行。截图落在 `docs/`：
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + click does nothing + double-click into source → click an internal link → todo resolutions → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
-| 文件 | 内容 |
+| File | Contents |
 | --- | --- |
-| `scheme-{cream,graphite,paper}-{light,dark}.png` | 6 种配色组合各一张 |
-| `settings-appearance.png` | 设置里的「名字 / 色系 / 明暗 / 安全」 |
-| `meta-tags.png` | 「整理」弹层里的标签多选 |
-| `left-rename.png` | 左栏目录的就地重命名输入框 |
-| `desktop-image.png` | 正文里的图片（整窗） |
-| `image-resize.png` | 图片选中态：描边 + 尺寸工具条 + 拖拽把手 |
-| `code-block.png` | 代码块：语言标签 + 语法高亮 + 复制按钮 |
-| `note-links.png` | 站内链接 + 待办的「→ 解决方式」 |
-| `card-multi.png` | 卡片预览里的多图并排（三张不同比例的图均分一行） |
-| `lock-screen.png` | 密码锁屏 |
-| `desktop-window.png` / `tag-colors.png` | 默认界面 / 标签配色 |
+| `scheme-{cream,graphite,paper}-{light,dark}.png` | One per color scheme × light/dark |
+| `settings-appearance.png` | Settings: name / scheme / light-dark / security |
+| `meta-tags.png` | Tag multi-select in the "organize" sheet |
+| `left-rename.png` | Inline rename field in the left pane |
+| `desktop-image.png` | Image in the body (full window) |
+| `image-resize.png` | Selected image: outline + size toolbar + drag handle |
+| `code-block.png` | Code block: language label + syntax colors + copy button |
+| `note-links.png` | Internal links + todo resolutions |
+| `card-multi.png` | Multi-image card preview (three different aspect ratios sharing a row) |
+| `lock-screen.png` | Password lock screen |
+| `desktop-window.png` / `tag-colors.png` | Default UI / tag colors |
 
-> `zoom-*.png`（放大细节图）走 `capturePage` 裁区域，会写到系统临时目录而不是 `docs/`。
+> `zoom-*.png` (detail crops) go through `capturePage` region capture and are written to the system temp directory instead of `docs/`.
 
-几个断言值得留着：
+A few assertions worth keeping:
 
-| 输出 | 含义 |
+| Output | Meaning |
 | --- | --- |
-| `blank=… drag=none` | 占位元素不能是窗口拖动区 |
-| `window=1570x960` | 默认窗口尺寸（小屏幕会按比例收） |
-| `setClose … openAfter=0` / `setSwitch … before=true after=false` | 设置面板右半边和开关真的能点动 |
-| `tagEditor=8->10` | 标签能连着加两个 |
-| `rename=技术 -> 技术-改` + `renameBack=技术` | 目录改名真的搬了文件，且能改回来 |
-| `pinFlag=flags1 cards1 firstPinned=1` | 有置顶笔记就有标志，且排在最前 |
-| `orderDrag=changed` + `orderBack=restored` | 拖拽排序生效且可逆 |
-| `img=1/1/600x220 broken=0` | 图片真的解码出像素（600×220 是测试 SVG 自带尺寸） |
-| `imgPick=1/0 selected=1 tools=1 grip=1` | **单击只选中**：图还在（1）、没退成源码（0）、工具条和把手都出来了 |
-| `imgBox={"tools":1368,"frame":1376}` | 工具条贴着图片右边 8px，没飘到整列右边；`overflow:0` 说明按钮没撑破工具条 |
-| `imgHalf={"w":365,"box":730}` | 点 50% 预设，宽度正好是正文宽的一半 |
-| `imgDrag={"before":365,"after":465}` | 拖把手加宽 100px，松手后宽度真的变了 |
-| `imgNarrow={"fw":183,"tw":263,"over":40}` | 图比工具条还窄时，工具条居中溢出（40 = (263−183)/2） |
-| `imgResize={half,drag,mdHalf,mdDrag,narrow}` | 预设 / 拖拽 / 百分比 / 像素，都写进了磁盘上的 `.md` |
-| `preview=cards4 blank0 thumbs1` | 卡片预览：没有空白卡，至少一张缩略图 |
-| `crlf="这一行是正文…"` | CRLF 写的笔记摘要也能提取出来（这条守住过一个真 bug） |
-| `imgEdit=0/1` | **双击**图片才退回源码行 |
-| `imgPasteFile=… size=70` | 粘贴的图真的落到了磁盘上 |
-| `tagTints=8/8` / `grip=open1 close0` | 标签配色不撞 / `···` 单击展开收起 |
-| `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | 两个代码块都渲染出来，语言标签对，关键字 / 字符串 / 注释 / 函数名都染上色；**代码里的表格没被当成表格** |
-| `codeClick=2/0` | **单击代码块什么都不发生**：两个块都还在、一行围栏都没露 |
-| `codeEdit=1/2` | 双击才退回源码（少一个块、多两行围栏） |
-| `link={"wiki":2,"note":1,"add":1}` | 两个站内链接 / 一条待办解决方式 / 一个「＋」 |
-| `linkJump="图片测试"` | 点 `[[图片测试]]` 真的跳到那篇（看的是中栏的选中卡片） |
-| `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | 卡片路径逐级变短，到没有下级就整行不显示 |
-| `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | 目录拖拽换位，而且顺序写进了设置文件 |
-| `prune oldGone=true newThere=true` | 改名后旧目录（含里面的空子目录）真的被收走 |
-| `titleRename title="代Z码块测试" hasZ=true oldGone=true` | 改 H1 之后文件真的改名了，旧文件名不在了 |
-| `placeholderRename old=false new=true` | 启动时把「占位符/无标题.md」按正文标题改成了「占位符改名测试.md」 |
-| `hide={"hasRow":true,"hideBefore":17,"hideAfter":16,"hiddenCnt":"1","inHidden":1,"hiddenAfter":"0"}` | 右键菜单有「隐藏」；藏完列表少一条、左栏计数 +1；「已隐藏」里找得到同一篇；取消隐藏后计数归零 |
-| `appName brand="我的笔记" docTitle="我的笔记"` | 改名后左上角和窗口标题一起变 |
-| `thumbRow={"disp":"block","w":139,"cardW":313,"below":8}` | 卡片图是 block、在摘要下面另起一行 |
-| `thumbUniform sameH=true h=[96] fitOk=true modes=multi:2,solo:1,multi:2,solo:1,multi:3,multi:2` | **所有卡片缩略图高度一致**；单图 `contain` 不裁，多图 `cover` 且同一张卡片里宽度一致 |
-| `figs=[{"total":2,"shown":2,…,"gap":6},…,{"total":4,"shown":3,"more":"+1"}]` | 两张以上的卡片都真的并排显示了；一排最多露 3 张、间距 6px、不溢出卡片，第 4 张起收进 `+N` |
-| `lock={"enabled":true,"shown":true,"stillLocked":true,"errText":"密码不对","unlocked":true}` | 设完密码开关变开；「立即锁定」真的盖上；错密码被挡住并提示；对密码放行 |
+| `blank=… drag=none` | The placeholder element must not be a window drag region |
+| `window=1570x960` | Default window size (shrinks proportionally on small screens) |
+| `setClose … openAfter=0` / `setSwitch … before=true after=false` | The settings panel's right half and the toggles really respond to clicks |
+| `tagEditor=8->10` | Two tags can be added in a row |
+| `rename=技术 -> 技术-改` + `renameBack=技术` | Folder rename really moved files, and it can be undone |
+| `pinFlag=flags1 cards1 firstPinned=1` | A pinned note has a badge and sorts first |
+| `orderDrag=changed` + `orderBack=restored` | Drag reordering works and is reversible |
+| `img=1/1/600x220 broken=0` | The image really decoded to pixels (600×220 is the test SVG's intrinsic size) |
+| `imgPick=1/0 selected=1 tools=1 grip=1` | **A single click only selects**: the image is still there (1), it did not fall back to source (0), toolbar and handle are shown |
+| `imgBox={"tools":1368,"frame":1376}` | The toolbar sits 8px to the right of the image, not floating at the column edge; `overflow:0` means buttons don't burst out of it |
+| `imgHalf={"w":365,"box":730}` | The 50% preset gives exactly half the text column width |
+| `imgDrag={"before":365,"after":465}` | Dragging the handle 100px wider actually changes the width on release |
+| `imgNarrow={"fw":183,"tw":263,"over":40}` | When the image is narrower than the toolbar, the toolbar overflows centered (40 = (263−183)/2) |
+| `imgResize={half,drag,mdHalf,mdDrag,narrow}` | Preset / drag / percent / pixels — all written back into the `.md` on disk |
+| `preview=cards4 blank0 thumbs1` | Card previews: no blank cards, at least one thumbnail |
+| `crlf="这一行是正文…"` | Excerpts can be extracted from CRLF files too (this one guards a real bug) |
+| `imgEdit=0/1` | Only a **double-click** on an image reverts to the source line |
+| `imgPasteFile=… size=70` | A pasted image really lands on disk |
+| `tagTints=8/8` / `grip=open1 close0` | Tag colors don't collide / `···` opens and closes on click |
+| `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | Both code blocks render, the language label is right, keywords / strings / comments / function names are colored; **a table inside a code block is not treated as a table** |
+| `codeClick=2/0` | **A single click on a code block does nothing**: both blocks remain, zero fence lines exposed |
+| `codeEdit=1/2` | Double-click reverts to source (one block fewer, two fence lines more) |
+| `link={"wiki":2,"note":1,"add":1}` | Two internal links / one todo resolution / one `＋` button |
+| `linkJump="图片测试"` | Clicking `[[图片测试]]` really navigates there (verified via the selected card in the middle pane) |
+| `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
+| `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
+| `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
+| `titleRename title="代Z码块测试" hasZ=true oldGone=true` | Changing the H1 really renames the file; the old name is gone |
+| `placeholderRename old=false new=true` | On startup `占位符/无标题.md` becomes `占位符改名测试.md` from its heading |
+| `hide={"hasRow":true,"hideBefore":17,"hideAfter":16,"hiddenCnt":"1","inHidden":1,"hiddenAfter":"0"}` | The context menu has "hide"; hiding removes one row, bumps the sidebar count; the note is found under Hidden; unhiding zeroes the count |
+| `appName brand="我的笔记" docTitle="我的笔记"` | Renaming updates both the top-left label and the window title |
+| `thumbRow={"disp":"block","w":139,"cardW":313,"below":8}` | The card image is block-level and starts a new row below the excerpt |
+| `thumbUniform sameH=true h=[96] fitOk=true modes=multi:2,solo:1,multi:2,solo:1,multi:3,multi:2` | **All card thumbnails are the same height**; a single image uses `contain` (no crop), multiple images use `cover` and share the same width within a card |
+| `figs=[{"total":2,"shown":2,…,"gap":6},…,{"total":4,"shown":3,"more":"+1"}]` | Cards with two or more images really lay out side by side; at most 3 per row, 6px gaps, no overflow; the 4th onward collapse into `+N` |
+| `lock={"enabled":true,"shown":true,"stillLocked":true,"errText":"密码不对","unlocked":true}` | Enabling the password flips the toggle; "lock now" really covers the UI; a wrong password is rejected with a message; the right one gets through |
 
-最后一行 `verdict={...}` 把上面这些布尔值全打出来，哪一项红了直接看名字。
+The final `verdict={...}` line prints all of those booleans — if one goes red, the name tells you which.
 
-> 冒烟模式是**完全隔离**的，不会写脏你的真实笔记：
-> - 笔记库：启动时把 `appData/vault` 整份 `cpSync` 到 `temp/notes-smoke-vault`，
->   所有写操作都落在副本上（`vaultRoot()` 里的 `smokeVault()`）
-> - 设置文件：重定向到 `temp/notes-smoke-settings.json`
+> Smoke mode is **fully isolated** and will not dirty your real notes:
+> - Vault: on startup `appData/vault` is `cpSync`'d into `temp/notes-smoke-vault`; every write lands on the copy (`smokeVault()` in `vaultRoot()`)
+> - Settings file: redirected to `temp/notes-smoke-settings.json`
 >
-> 想跑在别的目录上，`NOTES_APP_VAULT` 优先于上面两条。
+> To run against another directory, `NOTES_APP_VAULT` takes precedence over both.
 >
-> 这一条是踩出来的：早期冒烟直接跑在真实库上，它挑真实笔记来点、来拖、来改标题，
-> 一跑就把用户正在写的笔记 `mtime` / `updated` 刷掉。现在复制一份过去，
-> 断言照样对着同样的数据跑，用户那边一个字节都不动。
+> This was learned the hard way: early smoke runs hit the real vault directly, picking real notes to click, drag and rename,
+> and one run would stomp the `mtime` / `updated` of whatever you were writing. Now it copies first — the assertions still
+> run against identical data and not a byte changes on your side.
 
-### 日常怎么操作
+### Day-to-day usage
 
-**写笔记**
-- 中栏右上角「新建笔记」按钮（或 `Ctrl/Cmd + N`），直接开始写。标题就是正文第一行 `# 标题`。
-- 输入 `# `、`- `、`- [ ] `、`> `、`**粗体**`、`` `代码` `` 会立刻渲染成对应样式。
-- 光标停在某一行时，那一行会露出 Markdown 源码方便改；移开又变回渲染态。
-- 想关掉这个行为：设置 → 编辑器 → 关掉开关。
+**Writing notes**
+- The `新建笔记` (New note) button at the top right of the middle pane — or `Ctrl/Cmd + N` — starts a note. The title is the first `# Heading` line of the body.
+- Typing `# `, `- `, `- [ ] `, `> `, `**bold**`, `` `code` `` immediately renders into the corresponding style.
+- When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
+- To turn this off: Settings → Editor → toggle it off.
 
-**底部快捷栏**
-- 编辑区底部常驻一条悬浮工具栏，不用记语法也能排版。它是浮在正文上的，不占版面（正文底部本来就留了空档）。
-- 左边一组是行内格式：粗体 / 斜体 / 删除线 / 行内代码 / 链接。
-- 右边一组是块级元素：图片 / 标题 / 列表 / 待办 / 引用 / 表格 / 分隔线。
-- 有选中文字时套在选中内容上；再点一次同一个按钮就取消。没选中时会插入一对标记，光标停在中间。
-- 标题按钮是循环的：正文 → `##` → `###` → 正文。
-- 表格按钮插入一个两列三行的模板，可以直接改。
+**Bottom quick bar**
+- A floating toolbar sits at the bottom of the editor so you don't have to remember syntax. It floats over the text rather than taking up layout space (the body already leaves room at the bottom).
+- The left group is inline formatting: bold / italic / strikethrough / inline code / link.
+- The right group is block elements: image / heading / list / todo / quote / table / divider.
+- With a selection, the format wraps the selection; clicking the same button again removes it. With no selection, it inserts a pair of markers and puts the cursor in between.
+- The heading button cycles: body → `##` → `###` → body.
+- The table button inserts a 2×3 template you can edit directly.
 
-**图片**
-- 三个入口：快捷栏的图片按钮（打开文件选择框，可多选）、`Ctrl/Cmd + V` 粘贴截图、把图片文件直接拖进正文。
-- 图片存进笔记库根目录的 `_assets/`，文件名是「时间戳 + 随机串」，不会撞车。
-- 正文里写的是**库内绝对路径**：`![示意图](_assets/20261026-153022-a1b2c3.png)`。
-  笔记在目录之间搬来搬去都不会失效——这也是不用相对路径的原因。
-- 图片必须**单独占一行**才会渲染成图；夹在句子中间的保持 Markdown 源码。
-- **单击图片只是选中**，不会跳成文字。选中后图片外面出现一圈描边，右上角浮出尺寸工具条，
-  右下角出现拖拽把手。点别处就取消选中。
-- **双击图片**才会把光标放进去、变回 `![alt](path)` 源码，用来改路径或 alt。
-  工具条最右边那个「编辑」也是同一个作用。
-- 文件被删了或路径写错，会显示一行「找不到图片：xxx」的提示，不是一个破图标。
-- 也支持你手写的相对路径（`./img.png`），会先按「笔记所在目录」找，找不到再按库根找。
+**Images**
+- Three entry points: the image button in the quick bar (opens a file picker, multi-select works), `Ctrl/Cmd + V` to paste a screenshot, or drag an image file straight into the body.
+- Images are stored in `_assets/` at the vault root, named `timestamp + random string`, so they never collide.
+- The body stores a **vault-absolute path**: `![diagram](_assets/20261026-153022-a1b2c3.png)`.
+  Moving the note between folders never breaks it — that's why relative paths aren't used.
+- An image must be **alone on its line** to render; one embedded mid-sentence stays as Markdown source.
+- **A single click only selects** the image — it does not flip to text. Once selected, an outline appears around it,
+  a size toolbar floats at the top right and a drag handle appears at the bottom right. Click elsewhere to deselect.
+- **Double-clicking** the image puts the cursor in and reverts it to `![alt](path)` source, for editing the path or alt text.
+  The "edit" button at the far right of the toolbar does the same thing.
+- If the file was deleted or the path is wrong, you get a "找不到图片：xxx" (image not found) line instead of a broken-image icon.
+- Hand-written relative paths (`./img.png`) also work: they resolve against the note's folder first, then the vault root.
 
-**改图片大小**
-- 选中图片后，右上角工具条上有 `25% / 50% / 75% / 100%` 四个预设，百分比是**相对正文宽度**算的，
-  窗口变窄图会跟着缩，不会溢出。点「原始」回到图片自己的像素尺寸。
-- 或者直接**拖右下角那个斜纹小方块**，想多宽拖多宽。拖动时只改样式，松手才写文件，
-  所以拖起来是跟手的，不会一卡一卡。
-- 宽度写在 Markdown 行尾的大括号里：
-
-  ```markdown
-  ![示意图](_assets/20261026-153022-a1b2c3.png){width=320}
-  ![示意图](_assets/20261026-153022-a1b2c3.png){width=50%}
-  ```
-
-  这是纯文本，别的 Markdown 编辑器里会当成一行多余的字显示（不影响图片本身）。
-  大括号里的其它属性（`height` 之类）会原样保留，只改 `width`。
-- 拖动出来的宽度写的是像素，预设写的是百分比。两者可以混用，下次打开都认得。
-
-**表格**
-- 标准 Markdown 表格会渲染成真表格：整表一个圆角外框，表头浅底，行与行、列与列之间各一根极淡的分隔线，没有斑马纹。
-- 对齐语法生效：`:---` 靠左、`:---:` 居中、`---:` 靠右。
-- 单元格里支持 `` `代码` ``、**粗体**、*斜体*、~~删除线~~、链接。
-- **单击表格**会把光标放进去，整块变回 Markdown 源码，改完点别处又变回表格。
-- 表格里的文字可以直接拖选复制（拖动不会触发编辑）。
-
-**代码块**
-- 围栏代码块（```` ```ts ```` / `~~~`）会渲染成一整块：顶上一个小标签写着语言，右上角一个「复制」按钮（鼠标移上去才出现）。
-- **会按语言高亮**：注释、字符串、数字、关键字、类型、函数名、标点各一种颜色。
-  认识 `js/ts/jsx`、`json`、`py`、`sh/bash`、`html/xml`、`css/scss`、`sql`、`go`、`rust`、`java/c/c++/c#`、`yaml`、`toml`，
-  别名也认（`typescript`、`python`、`bash`、`rs`、`c++`……）。认不出的语言就原样显示，不报错。
-- 高亮的颜色走 CSS 变量（`--hl-kw` / `--hl-str` / …），所以换色系、切明暗都不用重算。
-- **双击代码块**把光标放进去，整块变回源码，改完点别处又变回渲染态——和图片是同一套交互。
-  **单击什么都不做**：早先单击就散成源码，想滚一下、想挑个词复制、或者只是点偏了都得再点回去；
-  鼠标移上去会提示「双击编辑」。
-- 代码块里的 `| a | b |` 不会被误认成表格，`![x](y)` 也不会被当成图片（整块是代码，里面的东西都不参与解析）。
-- 以前是「把两行围栏藏起来、中间每行加个底色」的做法，拖选跨过代码块时被隐藏的围栏仍参与选区计算，
-  选区会画在空白处，看着像错位；现在整块是一个 widget，这个问题没有了。
-
-**链接到另一篇笔记**
-- 两种写法都认，点一下就跳过去：
+**Resizing images**
+- With the image selected, the toolbar offers `25% / 50% / 75% / 100%` presets. Percentages are **relative to the text column width**,
+  so the image shrinks with the window instead of overflowing. "Original" returns to the image's intrinsic pixel size.
+- Or **drag the small hatched square at the bottom right** to whatever width you want. Dragging only updates styles; the file is
+  written on release, which is what keeps it responsive instead of stuttering.
+- The width is stored in braces at the end of the Markdown line:
 
   ```markdown
-  见 [[产品方向思考]]                     ← 按标题找，最省事
-  见 [上次的结论](工作/产品/方向.md)        ← 按路径找，最精确
+  ![diagram](_assets/20261026-153022-a1b2c3.png){width=320}
+  ![diagram](_assets/20261026-153022-a1b2c3.png){width=50%}
   ```
 
-- `[[标题]]` 是逐级匹配的：相对当前笔记目录 → 库内路径 → 同名文件 → 同名标题 → 标题包含（只认唯一结果）。
-  所以笔记改名之后，`[[旧标题]]` 仍然能找到它。
-- `[文字](路径.md)` 里的路径可以是相对的（`./a.md`、`../x/a.md`）也可以是库内路径。
-- `[文字](https://…)` 这种外链会用系统浏览器打开，不会在应用里新开窗口。
-- 跳过去之后如果那篇在别的目录 / 归档 / 废纸篓里，会自动退回到能看见它的视图，不会「点开了却找不到」。
-- 找不到会弹一行轻提示（「没有找到「xxx」这篇笔记」），不是默默没反应。
-- 快捷栏里有两个链接按钮：一个插外链 `[文字](url)`，一个插站内链接 `[[笔记名]]`。
-- 想编辑链接文字：点这一行别的位置把光标放进去（整行会变回源码），或者用方向键移过去。
+  This is plain text; other Markdown editors will show it as a stray line of characters (the image itself is unaffected).
+  Other attributes inside the braces (`height` and so on) are preserved as-is — only `width` is touched.
+- Dragging writes pixels, presets write percentages. They mix freely and both are understood next time the note opens.
 
-**待办的解决方式**
-- 每条待办后面可以跟一段「怎么解决」，写在箭头后面：
+**Tables**
+- Standard Markdown tables render as real tables: one rounded outer border, a tinted header row, a very light rule between rows
+  and between columns, no zebra striping.
+- Alignment syntax works: `:---` left, `:---:` center, `---:` right.
+- Cells support `` `code` ``, **bold**, *italic*, ~~strikethrough~~ and links.
+- **A single click on the table** puts the cursor in and the whole block reverts to Markdown source; click elsewhere to render again.
+- Text inside a table can be drag-selected and copied (dragging does not trigger editing).
+
+**Code blocks**
+- Fenced code blocks (```` ```ts ```` / `~~~`) render as one block: a small language label on top and a "copy" button at the top right (shown on hover).
+- **Syntax highlighting by language**: comments, strings, numbers, keywords, types, function names and punctuation each get a color.
+  It understands `js/ts/jsx`, `json`, `py`, `sh/bash`, `html/xml`, `css/scss`, `sql`, `go`, `rust`, `java/c/c++/c#`, `yaml`, `toml`,
+  plus aliases (`typescript`, `python`, `bash`, `rs`, `c++`…). Unknown languages are shown verbatim, no error.
+- Highlight colors come from CSS variables (`--hl-kw` / `--hl-str` / …), so switching scheme or light/dark needs no recomputation.
+- **Double-clicking a code block** puts the cursor in and reverts the block to source; click elsewhere to render again — the same interaction as images.
+  **A single click does nothing**: it used to explode into source, so scrolling, selecting a word to copy, or a slightly-off click
+  all required clicking back. Hovering shows a "双击编辑" (double-click to edit) hint.
+- A `| a | b |` inside a code block is not mistaken for a table, and `![x](y)` is not mistaken for an image (the whole block is code; nothing inside is parsed).
+- The old approach was "hide the two fence lines, tint every line in between" — but the hidden fences still participated in selection
+  arithmetic, so dragging a selection across a code block painted it in empty space and looked misaligned. Now the block is a single
+  widget and the problem is gone.
+
+**Linking to another note**
+- Both forms are recognized, and both navigate on click:
 
   ```markdown
-  - [ ] 登录偶发失败 → 换掉旧的 token 校验，见 [[登录改造]]
-  - [x] 导出太慢 → 改成流式写，参考 https://example.com/stream
+  see [[产品方向思考]]                     ← by title, easiest
+  see [last conclusion](工作/产品/方向.md)  ← by path, most precise
   ```
 
-- 渲染出来箭头是淡色的，解决方式是浅灰小字，和待办正文分得开；里面可以放 `[[笔记]]` 链接，一样能点。
-- 勾掉这条待办时，删除线只划到箭头为止——解决方式不算「待办本身」。
-- 还没写解决方式的待办，行尾有一个淡色的「＋」：鼠标移到这一行才出现，点一下就补上 `→ ` 并把光标停在后面。
-- 也接受 `->` 这种写法，不用非得打全角箭头。
+- `[[title]]` matches in stages: relative to the current note's folder → vault path → same filename → same title → title contains
+  (only if the result is unique). So after a note is renamed, `[[old title]]` still finds it.
+- In `[text](path.md)` the path can be relative (`./a.md`, `../x/a.md`) or vault-relative.
+- `[text](https://…)` external links open in the system browser, never a new window inside the app.
+- If the target lives in another folder, the archive or the trash, the view switches to one where it's visible — you never get
+  "it opened but I can't see it".
+- When nothing matches you get a light toast ("没有找到「xxx」这篇笔记" — no such note), not silence.
+- The quick bar has two link buttons: one inserts an external link `[text](url)`, one inserts an internal link `[[note name]]`.
+- To edit the link text: click elsewhere on the line to put the cursor in (the line reverts to source), or move there with arrow keys.
 
-**卡片预览**
-- 中栏每张卡显示「一段摘要 + 正文里的缩略图」，摘要最多两行，超出截断。
-- 摘要**不是**简单取第一行：它会跳过标题（标题已经显示在卡片上方了）、跳过表格的 `| --- |` 分隔行、
-  跳过代码块的 ``` 围栏、跳过单独占行的图片，然后按段落顺序往下取，凑够字数就停。
-- 正文里**没有普通段落**时逐级降级，不会空着：
-  表格 → 取第一行数据（`产品 · 需求与方向 · 自动分配`）；代码块 → 取第一行代码；只有图 → 只显示缩略图。
-- 缩略图**另起一行**、**高度固定 96px**，一列卡片扫下来图都一样高。分两种情况：
-  - **只有一张图**：宽度按图片自己的比例走（上限是卡片宽度），不裁、不留空框。
-  - **两张以上**：均分一行并排摆开，最多露 **3 张**，超出的收进右下角的 `+N`。
-    多图都裁成同一块（`object-fit: cover`），所以同一张卡片里的图永远一样大 ——
-    笔记里的图比例从 1:1 到 3:1 都有，各按各的比例排会出现「一张占满整行、后面全被挤掉」。
-  - 整篇只有图没有文字时，缩略图顶到最上面，不留一段空白。
-  - 早期是 54×54 的方形小图贴在右边，长摘要会被挤成很窄的一条；
-    后来一度改成「100% 宽 + 96 高 + `object-fit: cover`」，结果接近方形的截图
-    被裁掉三分之二、看着像放大了一块，宽图却几乎完整，一列下来像是「每张图大小都不一样」。
-    单图改成只固定高度、多图均分一行，是这两轮踩坑之后的结果。
-- 代码块里的 `![](x.png)` 不算图（先按行扫掉围栏块再取图），同一张图重复引用只算一次。
-- 图片被删了或路径写错，缩略图直接消失，卡片上不会留一个破图标；一排图全挂了整排撤掉。
-- 真的一行字一张图都没有，卡片上写「空白笔记」，让你知道是空的而不是没渲染出来。
-- 标题下面还有一行**目录路径**，显示的是「还没钻到的那几层」：
+**Todo resolutions**
+- Each todo can carry a "how this gets solved" note after an arrow:
 
-| 当前选中 | 卡片上显示 |
+  ```markdown
+  - [ ] login fails intermittently → replace the old token check, see [[login rework]]
+  - [x] export is too slow → switch to streaming, see https://example.com/stream
+  ```
+
+- The arrow renders in a muted color and the resolution in small grey text, clearly separated from the todo itself; `[[notes]]` inside it are clickable.
+- Checking the todo strikes through only up to the arrow — the resolution isn't part of "the todo".
+- A todo without a resolution shows a faint `＋` at the end of the line: it appears on hover, and clicking it inserts `→ ` and puts the cursor after it.
+- `->` works too; you don't have to type the full-width arrow.
+
+**Card previews**
+- Each card in the middle pane shows "an excerpt + thumbnails from the body". Excerpts are at most two lines, truncated beyond that.
+- The excerpt is **not** just the first line: it skips the heading (already shown above the card), skips the table's `| --- |` separator row,
+  skips code fences and skips images that sit alone on a line, then walks paragraphs in order until it has enough characters.
+- If there is **no ordinary paragraph** it degrades step by step rather than showing nothing:
+  table → first data row (`产品 · 需求与方向 · 自动分配`); code block → first line of code; images only → thumbnails only.
+- Thumbnails **start a new row** and have a **fixed 96px height**, so a column of cards has uniformly tall images. Two cases:
+  - **One image**: width follows the image's own aspect ratio (capped at the card width), no crop and no empty frame.
+  - **Two or more**: they share one row evenly, at most **3** visible, the rest collapse into `+N` at the bottom right.
+    Multiple images are cropped to the same box (`object-fit: cover`), so images within one card are always the same size —
+    note images range from 1:1 to 3:1, and honoring each ratio produced "one image eats the whole row and the rest get squeezed out".
+  - When a note is all images and no text, the thumbnails move to the top with no blank gap above them.
+  - Early on this was a 54×54 square pinned to the right, which squeezed long excerpts into a narrow strip. Then it became
+    "100% wide + 96 tall + `object-fit: cover`", which cropped near-square screenshots by two thirds so they looked zoomed,
+    while wide images stayed almost intact — a column read as "every image is a different size". Single images keep a fixed
+    height only; multiple images share the row evenly. That's the result of two rounds of getting it wrong.
+- `![](x.png)` inside a code block doesn't count (fenced blocks are stripped line by line before collecting images), and the same
+  image referenced twice counts once.
+- If an image was deleted or the path is wrong the thumbnail simply disappears — no broken icon. If a whole row fails, the row is removed.
+- If there really is neither text nor image, the card says "空白笔记" (empty note) so you know it's empty rather than unrendered.
+- Below the title there is a **folder path** row showing "the levels you haven't drilled into yet":
+
+| Current selection | Shown on the card |
 | --- | --- |
-| 全部笔记 | 完整路径 `技术 / 前端 / React` |
-| 一级目录 `技术` | `前端 / React` |
-| 二级目录 `技术/前端` | `React` |
-| 笔记就在这一层（下面没有更深了） | 整行不显示 |
+| All notes | Full path `技术 / 前端 / React` |
+| First-level folder `技术` | `前端 / React` |
+| Second-level folder `技术/前端` | `React` |
+| The note sits at this level (nothing deeper) | The whole row is hidden |
 
-  所以越往下钻这一行越短，最后自然消失，不会出现「技术 / 技术 / 技术」这种废话。
+  So the deeper you drill, the shorter this row gets, and it disappears naturally — no `技术 / 技术 / 技术` nonsense.
 
-**调整顺序**
-- 中栏列表**不跟随编辑时间自动重排**。写东西不会让卡片乱跳。
-- 想换位置就**按住卡片上下拖**：会出现一根蓝色插入线，松手落位。顺序会写进 front matter 的 `order`，重启后还在。
-- 置顶的笔记永远在最上面一组，拖不出这个分组。
-- 新建的笔记排在最前面。
-- 拖拽和左滑是同一套指针手势：**竖向意图**（上下移动）是调顺序，**横向意图**（左右移动）是左滑操作条。
+**Reordering**
+- The middle list **does not re-sort itself by edit time**. Writing never makes cards jump around.
+- To move something, **press and drag the card up or down**: a blue insertion line appears and the card drops where you release.
+  The order is written into `order` in the front matter and survives a restart.
+- Pinned notes always sit in the top group and cannot be dragged out of it.
+- New notes go to the front.
+- Drag and swipe share one pointer gesture: **vertical intent** (moving up/down) reorders, **horizontal intent** (moving left/right) opens the swipe actions.
 
-**左栏目录 / 标签也能排序**
-- 按住目录行上下拖就能换位置，会出现一根插入线标出落点。**只能在同级之间换位**（跨级拖会让目录树结构变得莫名其妙）。
-- 顺序存在设置文件的 `folderOrder` 里（一个路径数组），重启后还在。
-- 没排过的新目录自动排到末尾，按名字排，不用回头补序号。
-- 标签列表同理（`tagOrder`），默认按「用得多的在前」，拖一次之后就按你的顺序来。
-- 拖动时铅笔、展开箭头不参与拖拽；拖完不会顺手切换筛选。
+**Folders and tags in the left pane can be reordered too**
+- Press and drag a folder row up or down to move it; an insertion line marks the drop point. **Only within the same level**
+  (cross-level drags would make the tree structure nonsensical).
+- The order is stored as `folderOrder` (an array of paths) in the settings file and survives a restart.
+- New folders that were never ordered fall to the end, sorted by name — you never have to go back and number them.
+- Same for the tag list (`tagOrder`): by default most-used first, and after one drag it follows your order.
+- The pencil and expand arrows don't participate in dragging; finishing a drag doesn't accidentally change the filter.
 
-**待办**
-- 写 `- [ ] 事情` 会变成复选框，点一下打勾，后面的文字自动加删除线。
-- 勾选状态直接写回文件（`- [x] 事情`）。
-- 每条后面可以跟 `→ 解决方式`，详见上面「待办的解决方式」。
+**Todos**
+- `- [ ] something` becomes a checkbox; clicking it checks it and strikes through the text.
+- The checked state is written straight back to the file (`- [x] something`).
+- Each can carry a `→ resolution`, see "Todo resolutions" above.
 
-**找东西**
-- `Ctrl/Cmd + K` 聚焦搜索框，输入即搜。标题、正文、标签、目录都参与匹配，标题命中优先。
-- 搜索词在卡片和右侧正文里同时高亮，正文自动滚到第一处命中。
-- 右上角显示「N 处匹配」；没有命中就不显示徽标。
+**Finding things**
+- `Ctrl/Cmd + K` focuses the search box and searches as you type. Title, body, tags and folder all participate; title hits rank first.
+- Matches are highlighted both on the cards and in the body, which scrolls to the first hit.
+- The top right shows "N 处匹配" (N matches); the badge is hidden when there are none.
 
-**整理**
-- 卡片左滑（鼠标拖也行）露出操作条：置顶 / 归档 / 整理 / 隐藏 / 删除。
-- 桌面端更顺手：**单击卡片右上角的 `···`** 展开操作条（再点一次收起），或者**右键卡片**弹菜单。
-- 「整理」里可以改目录和标签。改目录会真的移动文件到对应文件夹。
-- **标签是多选的**：已选的显示成彩色 chips（点 `×` 删掉），下面是已有标签的淡色 chips，点一下就加，可以连着点。
-  输入框里打新标签、回车也能加（不要求标签已存在）。输入框空着按退格删掉最后一个。
-- 操作条显示哪几个按钮，在设置 → 交互 → 左滑显示的操作里勾选（至少留一个）。
+**Organizing**
+- Swipe a card left (mouse drag works too) to reveal the action bar: pin / archive / organize / hide / delete.
+- On desktop it's easier to **click the `···` at the card's top right** (click again to collapse) or **right-click the card** for a menu.
+- "整理" (organize) lets you change folder and tags. Changing the folder really moves the file to that directory.
+- **Tags are multi-select**: selected ones appear as colored chips (click `×` to remove), with pale chips of existing tags below —
+  click to add, repeatedly. Typing a new tag and pressing Enter also works (the tag doesn't need to exist). Backspace on an empty input
+  removes the last one.
+- Which buttons the action bar shows is configurable in Settings → Interaction → swipe actions (at least one must stay on).
 
-**隐藏**
-- 右键笔记 →「隐藏这篇笔记」，或者左滑 / `···` 里的「隐藏」。
-- 隐藏之后：不进任何列表、不进搜索、**也不计入左栏目录和标签的数量**——就是彻底看不见了。
-- 找回来的入口在左栏底部：**「已隐藏」**，和「归档」「废纸篓」并排，后面跟着数量。
-- 在「已隐藏」里点「取消隐藏」就回到原来的目录，什么都没变。
-- 和「归档」的区别是语义：归档是「这件事做完了」，隐藏是「我现在不想看见它」。两者互不影响。
-- 状态写在 front matter 的 `hidden: true`。**只有隐藏了才写这一行**，没隐藏的笔记文件不会多出一行。
-- 隐藏会把置顶一起取消——不然它在「已隐藏」里还排在第一个，有点怪。
+**Hiding**
+- Right-click a note → "隐藏这篇笔记" (hide this note), or the "hide" action in the swipe bar / `···` menu.
+- Once hidden it appears in no list, no search, **and doesn't count toward the folder and tag totals in the sidebar** — it's simply gone.
+- The way back is at the bottom of the left pane: **"已隐藏"** (Hidden), next to Archive and Trash, with a count after it.
+- Clicking "取消隐藏" (unhide) inside Hidden returns it to its original folder, nothing else changed.
+- The difference from Archive is intent: archiving means "this is done", hiding means "I don't want to see it right now". They don't affect each other.
+- State lives in `hidden: true` in the front matter. **The line is only written when hidden**, so normal notes never gain an extra line.
+- Hiding also clears the pin — otherwise it would still sort first inside Hidden, which is odd.
 
-**密码锁定**
-- 设置 → 安全 → 「密码锁定」开关。第一次打开会弹窗让你设密码（至少 4 位，输两遍）。
-- 打开之后**每次启动都要输密码**才能进。也可以点「立即锁定」手动锁。
-- 密码输错会抖一下并提示「密码不对」，不会告诉你哪里错了。
-- 改密码：设置 → 安全 → 「设置密码」。
-- 忘记密码：关掉应用，用记事本打开设置文件，把 `lockHash` 改成空字符串、`lockEnabled` 改成 `false`。
-  设置文件位置见设置面板最下面的「笔记库位置」旁边——同级的 `settings.json`。
-- **这是一把挡人的锁，不是加密。** 笔记本身还是磁盘上的明文 `.md`，
-  能直接拿到文件的人绕得过去。它的用途是「离开工位时别让人随手翻」。
-- 密码只存摘要不存明文，摘要带算法前缀（`s1:` = SHA-256，`f1:` = 环境不支持 WebCrypto 时的退化算法）。
+**Password lock**
+- Settings → Security → "密码锁定" (password lock) toggle. The first time you enable it, a dialog asks you to set a password
+  (at least 4 characters, entered twice).
+- Once on, **every launch requires the password**. "立即锁定" (lock now) locks manually.
+- A wrong password shakes and says "密码不对" (wrong password) without revealing which part was wrong.
+- Change it: Settings → Security → "设置密码" (set password).
+- Forgot it: quit the app, open the settings file in Notepad, set `lockHash` to an empty string and `lockEnabled` to `false`.
+  The settings file sits next to the "vault location" shown at the bottom of the settings panel — same folder, `settings.json`.
+- **This is a lock to keep people out, not encryption.** Notes stay plaintext `.md` on disk; anyone who can read the files can bypass it.
+  Its purpose is "don't let someone flip through my notes while I'm away from my desk".
+- Only a digest is stored, never the password, and the digest carries an algorithm prefix (`s1:` = SHA-256, `f1:` = fallback used
+  when WebCrypto is unavailable).
 
-**改左上角的名字**
-- 设置 → 外观 → 「名字」，改完立刻生效，窗口标题也跟着变。
-- 最多 12 个字，太长会省略显示，不会把右边的收起按钮挤跑。
-- 清空等于没改，会回到默认的「笔记」。
+**Renaming the app name**
+- Settings → Appearance → "名字" (name). Applies immediately, including the window title.
+- At most 12 characters; longer names are ellipsized so they never push the collapse button out of the way.
+- Clearing it counts as no change and falls back to the default "笔记".
 
-**改目录名**
-- 鼠标移到左栏某个目录上，行尾会出现一支铅笔，点它就地改名，回车确认、Esc 取消。
-- 改名会**真的把磁盘上的文件夹改掉**，底下所有笔记（含子目录）的文件一起搬过去。
-- 搬完**旧目录会被收走**：连里面残留的空子目录一起删（只删空目录，还有文件就停手）。
-  以前这里会留下一个空壳，看起来像「改名没成功」。
-- 改名后同步更新：内存里的路径、当前选中的笔记、目录展开状态、正在筛选的那个目录。
-- 目标目录已存在时自动加序号（`技术 2`），不会和已有目录混在一起。
-- 为什么是铅笔按钮而不是双击行：点一下目录行就会切换筛选并重绘整棵树，行元素被换掉了，第二次点击落在新元素上，`dblclick` 永远不会触发。
+**Renaming folders**
+- Hover a folder row in the left pane and a pencil appears at the end; click it to rename in place, Enter to confirm, Esc to cancel.
+- Renaming **really renames the folder on disk**; every note beneath it (including subfolders) moves along.
+- Afterwards **the old folder is reclaimed**: leftover empty subfolders are removed too (only empty ones — anything with files stops the process).
+  It used to leave an empty husk behind, which looked like "the rename didn't work".
+- The rename also updates in-memory paths, the currently selected note, the folder's expanded state and the active filter.
+- If the target name already exists, a number is appended (`技术 2`) rather than merging into an existing folder.
+- Why a pencil button instead of double-clicking the row: a single click changes the filter and repaints the whole tree, so the row
+  element is replaced and the second click lands on a new element — `dblclick` never fires.
 
-**改标签名**
-- 标签行上也有同一支铅笔，点它就地改名。
-- 改名会**把所有笔记里的这个标签一起改掉**（去重后写回各自的 front matter），
-  标签顺序表、正在按这个标签筛选的视图也跟着换。
-- 改标签不会动文件，只改 front matter 里的 `tags`。
+**Renaming tags**
+- Tag rows have the same pencil; click it to rename in place.
+- Renaming **updates that tag in every note** (deduplicated, written back to each front matter), and the tag order list plus the
+  current tag filter follow along.
+- Tag renaming never touches files, only `tags` in the front matter.
 
-**标题改了，文件名跟着改**
-- 正文第一个 `# 标题` 改动之后（停手约 1.4 秒），文件名会同步改成一样的。
-  这是纯文本笔记最自然的样子：文件列表里看到的名字就是标题。
-- 没有 `# 标题` 的笔记不会触发（此时标题就是文件名），所以不会出现「改名改回去」的死循环。
-- 改名时会顺手把**别的笔记里指向它的链接**改掉：`[[旧标题]]` → `[[新标题]]`，
-  `(旧路径.md)` → `(新路径.md)`。
-- 文件名清洗规则和新建笔记一样（Windows 非法字符、保留名）。
-- **启动时还会补一次历史账**：文件名还是「无标题」「无标题 3」「未命名」「untitled」这种占位符的，
-  一开应用就按正文的 `# 标题` 改过来。
-  这个功能上线之前建的笔记，正文写着 `# 智能工厂`、文件名却一直挂着「无标题 8.md」，
-  在资源管理器里根本认不出哪篇是哪篇；而「改正文才触发改名」对老笔记永远不会生效。
-  只动占位符 —— 你自己起过名字的文件一个都不碰，免得「一开应用满库文件被改名」。
-- 不想要这个行为：设置 → 编辑器 → 关掉「标题改了，文件名跟着改」（关掉后启动时的对齐也一起停）。
+**Changing the title renames the file**
+- After the first `# Heading` in the body changes (about 1.4 seconds after you stop typing), the filename is renamed to match.
+  That's the most natural shape for a plain-text note app: the name you see in the file list is the title.
+- Notes without a `# Heading` don't trigger it (the filename *is* the title then), so there's no rename-back-and-forth loop.
+- The rename also rewrites **links pointing at it from other notes**: `[[old title]]` → `[[new title]]`, `(old/path.md)` → `(new/path.md)`.
+- Filename sanitization matches new-note creation (Windows illegal characters, reserved names).
+- **On startup there is also a one-time catch-up pass**: files still named `无标题`, `无标题 3`, `未命名`, `untitled` (placeholders)
+  are renamed from their `# Heading` as soon as the app opens.
+  Notes created before this feature existed had a body saying `# 智能工厂` while the file stayed `无标题 8.md` — impossible to tell
+  apart in Explorer — and "rename when the body changes" would never fire for them.
+  Only placeholders are touched; files you named yourself are never modified, so opening the app can't rename your whole vault.
+- To opt out: Settings → Editor → turn off "标题改了，文件名跟着改" (rename file with title). The startup catch-up stops too.
 
-**标签颜色**
-- 颜色全自动分配，不用自己挑。同一个标签永远是同一个颜色。
-- 同一批标签之间会尽量挑差异大的色相，不会出现两个标签撞成一样的颜色。
-- 左栏标签列表的图标、中栏卡片上的标签、右栏标题栏的标签，三处颜色一致。
-- 亮色主题是淡色底 + 深色字，暗色主题是深色底 + 浅色字，都跟着主题走。
+**Tag colors**
+- Colors are assigned automatically — you never pick one. The same tag always gets the same color.
+- Tags in the same set are spread across distinct hues so two never end up looking identical.
+- The icon in the left tag list, the tag on the middle card and the tag in the right pane's header all use the same color.
+- Light themes use a pale background with dark text; dark themes use a dark background with light text — both follow the theme.
 
-**归档 / 已隐藏 / 废纸篓**
-- 左栏底部固定三个入口，不随 tab 切换。
-- 删除先进废纸篓（文件还在，只是标记 `trashed: true`），在废纸篓里可以恢复或彻底删除。
-- 废纸篓的「清空」是两步确认：点一次变红色「确认清空」，3 秒内再点才真删。
-- 「已隐藏」见上面「隐藏」那一节。
+**Archive / Hidden / Trash**
+- Three fixed entries at the bottom of the left pane, independent of the active tab.
+- Deleting moves to Trash first (the file is still there, just marked `trashed: true`); from Trash you can restore or delete permanently.
+- Emptying the trash is two-step: the first click turns the button red ("确认清空" — confirm), and only a second click within 3 seconds really deletes.
+- "已隐藏" is covered under "Hiding" above.
 
-**分栏 / 外观**
-- 左栏和中栏各自可折叠，点标题栏的 `‹`；折叠状态会记住。
-- 窗口默认 **1570×960**（三栏铺开刚好的那个大小）。屏幕小的话按可用区域的比例自动收
-  （1366×768 的笔记本上是 1175×655），不会顶出屏幕外面去。
-- 色系三选一，明暗三选一，两个维度独立组合，一共 6 套：
+**Panes and appearance**
+- The left and middle panes each collapse via the `‹` in their header; the collapsed state is remembered.
+- The window defaults to **1570×960** (exactly enough for three comfortable panes). On smaller screens it shrinks proportionally to the
+  available area (1175×655 on a 1366×768 laptop) and never spills off-screen.
+- Three color schemes × light/dark, independent dimensions, six combinations:
 
-| 色系 | 亮色 | 暗色 |
+| Scheme | Light | Dark |
 | --- | --- | --- |
-| 奶油 | 暖米底 + 鼠尾草绿，卡片浮在米色上 | 深咖啡底，暖而不刺眼 |
-| 石墨 | 深色侧边栏 + 近白正文 + 朱红点缀 | 近黑侧边 + 深灰正文 |
-| 纸白 | 中性白，最素的阅读环境 | 中性暗灰 |
+| Cream | Warm off-white + sage green, cards float on beige | Deep coffee, warm without glare |
+| Graphite | Dark sidebar + near-white body + vermilion accents | Near-black sidebar + dark grey body |
+| Paper | Neutral white, the plainest reading surface | Neutral dark grey |
 
-- 正文字体三选一（系统默认 / 霞鹜文楷 / Inter + 思源黑），字号行距各三档。
-- 色系只换颜色，不动排版；想改颜色只需要动 `src/styles/tokens.css` 一个文件。
+- Three body fonts (system default / LXGW WenKai / Inter + Source Han Sans), three sizes and three line heights.
+- A scheme only changes colors, never layout; to recolor everything you only touch `src/styles/tokens.css`.
 
-**快捷键**
+**Keyboard shortcuts**
 
-| 按键 | 作用 |
+| Key | Action |
 | --- | --- |
-| `Ctrl/Cmd + K` | 搜索 |
-| `Ctrl/Cmd + N` | 新建笔记 |
-| `Ctrl/Cmd + B` | 粗体 |
-| `Ctrl/Cmd + I` | 斜体 |
-| `Ctrl/Cmd + S` | 立刻保存（平时 450ms 自动保存） |
-| `Esc` | 关弹层 / 清搜索 / 收起左滑条 |
+| `Ctrl/Cmd + K` | Search |
+| `Ctrl/Cmd + N` | New note |
+| `Ctrl/Cmd + B` | Bold |
+| `Ctrl/Cmd + I` | Italic |
+| `Ctrl/Cmd + S` | Save now (auto-save runs every 450 ms otherwise) |
+| `Esc` | Close sheet / clear search / collapse swipe bar |
 
----
-
-## 1. 目录结构
+## 1. Project layout
 
 ```
 notes-app/
-├── index.html                 三栏静态骨架
+├── index.html                 static three-pane skeleton
 ├── vite.config.ts
-├── app-icon.png               图标源图（1024）
-├── src/                       ← 前端，两个外壳共用
-│   ├── main.ts                启动 + 全局事件
-│   ├── types.ts               Note / Settings / Filter 类型
-│   ├── store.ts               状态与业务逻辑（唯一可变数据源）
-│   ├── bus.ts                 事件总线，store 改完通知 UI
-│   ├── settings.ts            默认设置 + 字体清单
-│   ├── seed.ts                首次启动写入的示例笔记
-│   ├── icons.ts               内联 SVG
-│   ├── core/                  纯函数，零平台依赖
-│   │   ├── text.ts            转义 / 摘要 / 待办统计
-│   │   ├── fuzzy.ts           模糊搜索打分
-│   │   ├── frontmatter.ts     front matter 读写
-│   │   ├── tag-color.ts       标签自动配色（全局唯一分配）
-│   │   ├── image.ts           图片路径约定 / 资源 URL 解析
-│   │   ├── path.ts            路径拼接 / 文件名清洗
-│   │   ├── open.ts            外链交给系统浏览器
-│   │   └── time.ts            时间格式化
-│   ├── storage/               ★ 平台适配层
-│   │   ├── adapter.ts         StorageAdapter 接口
-│   │   ├── ipc.ts             命令通道（Electron / Tauri 二选一）
-│   │   ├── desktop.ts         桌面端：走 IPC 读写真实文件
-│   │   ├── browser.ts         浏览器：localStorage
-│   │   └── index.ts           运行时自动选择
+├── app-icon.png               icon source (1024)
+├── src/                       ← front end, shared by both shells
+│   ├── main.ts                bootstrap + global events
+│   ├── types.ts               Note / Settings / Filter types
+│   ├── store.ts               state and business logic (the only mutable source)
+│   ├── bus.ts                 event bus — store notifies the UI
+│   ├── settings.ts            default settings + font list
+│   ├── seed.ts                sample notes written on first launch
+│   ├── icons.ts               inline SVGs
+│   ├── core/                  pure functions, zero platform dependencies
+│   │   ├── text.ts            escaping / excerpts / todo stats
+│   │   ├── fuzzy.ts           fuzzy search scoring
+│   │   ├── frontmatter.ts     front matter read/write
+│   │   ├── tag-color.ts       automatic tag colors (globally unique assignment)
+│   │   ├── image.ts           image path conventions / asset URL resolution
+│   │   ├── path.ts            path joining / filename sanitization
+│   │   ├── open.ts            hand external links to the system browser
+│   │   └── time.ts            time formatting
+│   ├── storage/               ★ platform adapter layer
+│   │   ├── adapter.ts         StorageAdapter interface
+│   │   ├── ipc.ts             command channel (Electron or Tauri)
+│   │   ├── desktop.ts         desktop: real files over IPC
+│   │   ├── browser.ts         browser: localStorage
+│   │   └── index.ts           picks one at runtime
 │   ├── editor/
-│   │   ├── live-preview.ts    CodeMirror 装饰层（Live Preview 核心：表格 / 图片 / 代码块 / 链接 / 行内标记）
-│   │   ├── highlight.ts       代码高亮的词法着色（自带，不引 prism / shiki）
-│   │   ├── commands.ts        Markdown 编辑命令（快捷栏和快捷键共用）
-│   │   ├── image-insert.ts    图片落盘 + 插入（快捷栏 / 粘贴 / 拖拽共用）
-│   │   └── index.ts           mount / setReveal / setSearch / 粘贴拖拽拦截
-│   ├── ui/                    左栏 / 中栏 / 右栏 / 弹层 / 主题
-│   │   ├── quickbar.ts        编辑区底部悬浮快捷栏
-│   │   ├── tags.ts            标签多选（token 输入框）
-│   │   ├── links.ts           点站内链接 → 找到那篇笔记（找不到弹轻提示）
-│   │   ├── lock.ts            密码锁屏 + 设密码弹窗（摘要用 WebCrypto，退路是 FNV）
-│   │   └── titlebar.ts        无边框窗口的自绘按钮与拖动区
-│   └── styles/                CSS 按区域拆分
-│       ├── tokens.css         ★ 全部配色都在这里（3 色系 × 明暗 = 6 套，含代码高亮色）
-│       ├── base.css           三栏 grid / 折叠 / 无边框窗口按钮 / 轻提示
-│       ├── left.css           左栏（配色走 --side-* 一组，可独立反相）
-│       ├── mid.css            中栏卡片 / 左滑操作条
-│       ├── right.css          右栏文档头 / 表格 / 代码块 / 快捷栏
-│       ├── sheet.css          设置 / 弹层 / 分段控件
-│       └── lock.css           锁屏（z-index 110：盖住界面，但留着窗口按钮）
-├── electron/                  ← 外壳 A：Electron
-│   ├── main.cjs               窗口 / 托盘 / 自定义协议 / IPC
-│   ├── vault.cjs              文件读写（纯 Node，可单测）
-│   ├── vault.test.cjs         14 个单元测试
-│   ├── preload.cjs            只暴露一个 invoke
-│   ├── pack.mjs               打包脚本
+│   │   ├── live-preview.ts    CodeMirror decoration layer (the Live Preview core: tables / images / code blocks / links / inline marks)
+│   │   ├── highlight.ts       lexer for code highlighting (built in — no prism / shiki)
+│   │   ├── commands.ts        Markdown editing commands (shared by quick bar and shortcuts)
+│   │   ├── image-insert.ts    image write + insert (shared by quick bar / paste / drop)
+│   │   └── index.ts           mount / setReveal / setSearch / paste and drop interception
+│   ├── ui/                    left / middle / right panes, sheets, theme
+│   │   ├── quickbar.ts        floating quick bar at the bottom of the editor
+│   │   ├── tags.ts            tag multi-select (token input)
+│   │   ├── links.ts           internal link → find that note (toast when missing)
+│   │   ├── lock.ts            lock screen + set-password dialog (WebCrypto digest, FNV fallback)
+│   │   └── titlebar.ts        custom window buttons and drag regions for the frameless window
+│   └── styles/                CSS split by area
+│       ├── tokens.css         ★ all colors live here (3 schemes × light/dark = 6 sets, including code highlight colors)
+│       ├── base.css           three-pane grid / collapse / frameless window buttons / toasts
+│       ├── left.css           left pane (colors via the --side-* group, invertible on its own)
+│       ├── mid.css            middle pane cards / swipe action bar
+│       ├── right.css          right pane header / tables / code blocks / quick bar
+│       ├── sheet.css          settings / sheets / segmented controls
+│       └── lock.css           lock screen (z-index 110: covers the UI but leaves the window buttons)
+├── electron/                  ← shell A: Electron
+│   ├── main.cjs               window / tray / custom protocol / IPC
+│   ├── vault.cjs              file I/O (pure Node, unit-testable)
+│   ├── vault.test.cjs         14 unit tests
+│   ├── preload.cjs            exposes a single invoke
+│   ├── pack.mjs               packaging script
 │   └── tray.png
-└── src-tauri/                 ← 外壳 B：Tauri（需 Rust 才能编译）
+└── src-tauri/                 ← shell B: Tauri (needs Rust to compile)
     ├── Cargo.toml
     ├── tauri.conf.json
     └── src/{main,lib,vault,settings}.rs
@@ -479,33 +488,33 @@ notes-app/
 
 ---
 
-## 2. 笔记存哪儿
+## 2. Where notes live
 
-两个外壳用**同一个目录**，随时可以换：
+Both shells use **the same directory**, interchangeable at any time:
 
 ```
 %APPDATA%\com.notesapp.desktop\
-├── vault\                 ← 笔记本体
-│   ├── _assets\           ← 图片（时间戳命名，不会被笔记移动影响）
+├── vault\                 ← the notes themselves
+│   ├── _assets\           ← images (timestamped, unaffected by moving notes)
 │   ├── 工作\
 │   │   ├── 本周待办.md
 │   │   └── 产品\产品方向思考.md
 │   └── 生活\旅行\旅行计划：京都.md
-└── settings.json          ← 外观 / 交互 / 系统设置
+└── settings.json          ← appearance / interaction / system settings
 ```
 
-想放到别处（比如丢进 OneDrive 同步）：
+To put it elsewhere (say, inside OneDrive):
 
 ```powershell
 $env:NOTES_APP_VAULT = "D:\Notes"
 npm run desktop
 ```
 
-设置面板里的「笔记库位置」点一下会直接在资源管理器打开该目录。
+Clicking the vault location in the settings panel opens that directory in Explorer.
 
-### 文件格式
+### File format
 
-每篇笔记就是一个普通 `.md` 文件，目录结构就是分类结构。文件头部的 front matter 存元信息：
+Every note is a plain `.md` file, and the folder structure *is* the category structure. Front matter at the top holds metadata:
 
 ```markdown
 ---
@@ -520,44 +529,44 @@ order: 3000
 
 # 产品方向思考
 
-正文……
+Body…
 
-![示意图](_assets/20261026-153022-a1b2c3.png)
+![diagram](_assets/20261026-153022-a1b2c3.png)
 ```
 
-- **`.md` 是唯一真相源**，没有隐藏数据库。用 VSCode / Obsidian 直接改也没问题。
-- 标题取正文第一个 `# `；没有就用文件名。
-- front matter 在编辑器里不可见（存储层剥离），光标不会跑进去。
-- `order` 是手动排序用的序号（越小越靠前），拖过卡片才会有；没有这一行就落到「按更新时间」兜底。
-  只在真的有值时才写，老笔记不会被平白加上一行。
-- `hidden: true` 表示已隐藏，同样只在隐藏了才写。隐藏的笔记不进列表和搜索，也不计入目录/标签数量。
-- 删除 = `trashed: true`，文件还在；清空废纸篓才真删。
-- 「重建索引」= 重新扫描目录，随时可点。
-- 三个纯文本扩展，别的编辑器里会当普通文字显示，不影响阅读：
-  `[[另一篇笔记]]`（站内链接）、行尾 `{width=320}`（图片宽度）、待办后面的 `→ 解决方式`。
-- 目录顺序 / 标签顺序 / 应用名 / 密码摘要存在 `settings.json` 里，不在 `.md` 里——
-  它们是「这个库怎么摆、这个应用长什么样」的偏好，不是某一篇笔记的内容。
+- **The `.md` files are the only source of truth.** There is no hidden database; editing them in VSCode or Obsidian is fine.
+- The title is the first `# ` in the body; without one, the filename.
+- Front matter is invisible in the editor (stripped by the storage layer), so the cursor can't wander into it.
+- `order` is the manual sort index (lower comes first) and only exists after you drag a card; without it, notes fall back to "by update time".
+  It is only written when there is a real value, so older notes never gain a stray line.
+- `hidden: true` means hidden, also only written when hidden. Hidden notes appear in no list or search and don't count toward folder/tag totals.
+- Delete means `trashed: true` — the file is still there. Emptying the trash is what really deletes.
+- "重建索引" (rebuild index) rescans the directory; click it any time.
+- Three plain-text extensions show up as ordinary text in other editors and don't affect reading:
+  `[[another note]]` (internal link), trailing `{width=320}` (image width), and `→ resolution` after a todo.
+- Folder order / tag order / app name / password digest live in `settings.json`, not in `.md` files — they are preferences about
+  "how this vault is arranged, how this app looks", not the content of any one note.
 
 ---
 
-## 3. 后期移植
+## 3. Porting later
 
-平台相关代码被压缩在两层，业务代码一行都不用改。
+Platform-specific code is confined to two layers; not a line of business code has to change.
 
-### 换桌面平台（macOS / Linux）
+### Another desktop platform (macOS / Linux)
 
-- **Electron**：`npm run desktop` 在 mac 上直接跑；打包把 `--platform` 换成 `darwin` 即可。
-- **Tauri**：`cargo build` 直接跑；`vault.rs` 里 `reveal_in_file_manager` 已有 `#[cfg(target_os = "macos")]` 分支。
-- 快捷键代码里同时接受 `ctrlKey || metaKey`，不用改。
+- **Electron**: `npm run desktop` runs on macOS as-is; for packaging switch `--platform` to `darwin`.
+- **Tauri**: `cargo build` runs as-is; `reveal_in_file_manager` in `vault.rs` already has a `#[cfg(target_os = "macos")]` branch.
+- Shortcut handling already accepts `ctrlKey || metaKey`, no change needed.
 
-### 上 iOS
+### iOS
 
-Tauri 2 支持 iOS，笔记库换成 App 沙盒目录（`app.path().document_dir()`），前端零改动。
-Electron 没有 iOS 路线，这也是留着 Tauri 的原因。
+Tauri 2 supports iOS; point the vault at the app sandbox (`app.path().document_dir()`) and the front end needs zero changes.
+Electron has no iOS path — that's the main reason the Tauri shell is kept around.
 
-### 换存储（WebDAV / SQLite / 云端）
+### Another storage backend (WebDAV / SQLite / cloud)
 
-实现 `StorageAdapter` 的 11 个方法即可：
+Implement the 11 methods of `StorageAdapter`:
 
 ```ts
 init(): Promise<VaultInfo>
@@ -566,240 +575,248 @@ read(relPath: string): Promise<RawFile | null>
 write(relPath: string, raw: string): Promise<number>
 remove(relPath: string): Promise<void>
 move(from: string, to: string): Promise<void>
-prune?(folderRel: string): Promise<void>                    // 收走空目录（改名 / 移走笔记之后）
-writeAsset?(relPath: string, base64: string): Promise<void>   // 图片；不实现就退化成 data URL
+prune?(folderRel: string): Promise<void>                    // reclaim empty folders (after renames / moves)
+writeAsset?(relPath: string, base64: string): Promise<void>   // images; without it, falls back to data URLs
 loadSettings(): Promise<unknown>
 saveSettings(s: unknown): Promise<void>
 reveal?(): Promise<void>
 setAutostart?(on: boolean): Promise<void>
 ```
 
-### 换外壳
+### Another shell
 
-两个外壳的 IPC 命令名和参数**完全一致**，一共 17 个：
+Both shells expose **exactly the same IPC command names and parameters** — 17 in total:
 
-- 笔记库 8 个：`vault_info` / `vault_list` / `note_read` / `note_write` / `note_remove` /
+- 8 for the vault: `vault_info` / `vault_list` / `note_read` / `note_write` / `note_remove` /
   `note_move` / `vault_prune` / `asset_write`
-- 设置与系统 4 个：`settings_load` / `settings_save` / `vault_reveal` / `set_autostart`
-- 外链 1 个：`open_external`
-- 无边框窗口 4 个：`win_minimize` / `win_toggle_max` / `win_close` / `win_is_max`
+- 4 for settings and the system: `settings_load` / `settings_save` / `vault_reveal` / `set_autostart`
+- 1 for external links: `open_external`
+- 4 for the frameless window: `win_minimize` / `win_toggle_max` / `win_close` / `win_is_max`
 
-新增外壳只要实现这 17 个命令，前端 `src/storage/ipc.ts` 加一个分支就行。
+A new shell only needs those 17 commands plus one branch in `src/storage/ipc.ts`.
 
-> Electron 侧还多挂了一个 `asset_exists`，是早期做图片占位时留下的，前端已经没人调，
-> Tauri 侧就没跟着实现。要清理可以一起删掉。
+> The Electron side also registers `asset_exists`, left over from an early image-placeholder attempt. Nothing in the front end
+> calls it and the Tauri side never implemented it. Safe to delete from both.
 
-图片的显示另外走一层：Electron 用自定义协议 `vault://local/<库内路径>?b=<笔记所在目录>`
-（页面跑在 `app://` 下，跨协议读 `file://` 会被拦），Tauri 用 `asset://` 协议
-（`tauri.conf.json` 里 `security.assetProtocol.enable = true`）。
+Image display goes through a separate layer: Electron uses a custom `vault://local/<vault path>?b=<note folder>` protocol
+(the page runs under `app://`, and reading `file://` across protocols is blocked), Tauri uses `asset://`
+(`security.assetProtocol.enable = true` in `tauri.conf.json`).
 
-### 加全文索引
+### Full-text index
 
-现在是启动时把所有 `.md` 读进内存，十万字以内搜索是毫秒级。要到十万篇量级再上 SQLite FTS5：
+Right now every `.md` is read into memory at startup; search stays in the millisecond range up to a few hundred thousand characters.
+At the hundred-thousand-note scale, move to SQLite FTS5:
 
 ```sql
--- 中文必须用 trigram，unicode61 对中文完全无效
+-- Chinese requires trigram; unicode61 is useless for it
 CREATE VIRTUAL TABLE notes_fts USING fts5(
   rel_path UNINDEXED, title, body, tokenize = 'trigram'
 );
 ```
 
-索引表可以随时 `DROP` 重建，因为 `.md` 才是真相源。加完之后前端只需把 `searchNotes()` 换成一次 IPC 调用。
+The index table can be `DROP`ped and rebuilt at any time, because the `.md` files are the source of truth. Afterwards the front end
+only has to swap `searchNotes()` for a single IPC call.
+
+## 4. Pitfalls hit while building this
+
+**① `-webkit-app-region: drag` is a window-level hit region and ignores z-index**
+
+A frameless window is dragged via a CSS drag region. That region's rectangle is computed from layout, and **elements drawn on top of
+it still receive no mouse events**. At one point the right pane's placeholder `.blank` (`flex:1`, filling the column) was marked
+`drag`, and the right half of the settings sheet plus the close button became completely unclickable — that area had been taken
+over by window dragging.
+
+Rule: only put `drag` on a narrow top strip, never on an element that fills a large area; sheets' `.backdrop` is always `no-drag`
+(`no-drag` carves itself out of the drag region, so opening a sheet disables every drag area beneath it).
+
+Related: `webContents.sendInputEvent()` injects at the renderer's input layer and **bypasses window-level hit testing**, so clicking
+buttons with it in a smoke test cannot catch this class of bug. The only way is asserting `getComputedStyle(el).webkitAppRegion`.
+
+**② Vite's `emptyOutDir` does one `rmSync` of the whole directory**
+
+`dist/assets` holds 200+ font subsets; deleting that many at once trips bulk-delete guards in sandboxes and antivirus, and the build
+fails outright. So `vite.config.ts` sets `emptyOutDir:false` and `scripts/clean-dist.mjs` unlinks files one by one.
+
+**③ Block-level `Decoration.replace` can only come from a `StateField`**
+
+In CodeMirror 6, whole-block replacements (tables, images) must be provided from a `StateField`'s `provide`. Providing them from a
+`ViewPlugin` **fails silently** — no error, `errors=none`, just a blank area.
+Hence `live-preview.ts` has two field pairs: `tableBlocksField + tableField` and `imageBlocksField + imageField`. The `ViewPlugin`
+only handles source styling for "cursor inside the block"; the two must never decorate the same line.
+
+**④ Fixed-position overlays cover the sheet's own buttons**
+
+In the "organize" sheet the tag row sits right next to Cancel / Save. The first version gave tags a dropdown suggestion menu, which
+landed exactly on top of those two buttons — so clicking Save added a tag instead. The fix was **a row of pale chips inside the sheet**:
+click to add, no overlay, no click-through. Any future overlay inside a sheet: first ask whether it covers the bottom buttons.
+
+**⑤ Drag-reorder and swipe share one pointer gesture**
+
+A single `pointerdown` can only mean one thing. `mid.ts` uses a `mode` state machine that decides on the first movement past 6px:
+vertical intent → reorder, horizontal intent → swipe bar. **Once locked, the direction never changes**, otherwise a twitchy hand
+flips modes. The drop target is also clamped to the same pin group (`clampToGroup`); dropping across groups is immediately
+bounced back by the sort rule.
+
+**⑥ On Windows `.md` files are CRLF, and `split(/\n{2,}/)` won't split them**
+
+This is the root cause of the "card content sometimes doesn't show" bug. Files edited in Notepad or another editor use `\r\n`,
+while `split(/\n{2,}/)` only recognizes `\n\n`, so the whole note becomes **one block**; then the "drop the first block if it's a
+heading" rule throws away that single block and the excerpt is empty. Tables and image blocks failing to render had the same cause.
+
+The fix is to **normalize once at the entry point**: `raw.replace(/\r\n?/g, '\n')` in `parseFrontMatter()`. Every downstream
+"split on blank lines" routine (excerpts, tables, images) then works. Writing back always uses `\n` in `serializeFrontMatter()`,
+so it doesn't flip-flop. Any future code that reads a file and processes it line by line should think about line endings first.
+
+**⑦ "Clicking an image turns it into source" wasn't our code — it was CodeMirror**
+
+`ImageWidget` used to carry only a `clickToEdit`, but what actually moved the cursor into the image line was CodeMirror's own
+`mousedown` handler: once the cursor lands in the replaced line, `buildImages` swaps the whole line back to source.
+So deleting `clickToEdit` alone did nothing — `mousedown` on the `figure` had to `preventDefault()` + `stopPropagation()` to
+intercept before it reaches `contentDOM`. Only then can a single click mean "select".
+
+Code blocks later moved to double-click-to-edit and hit **the same trap**: `dblClickToEdit()` must also swallow `mousedown`, or the
+click puts the cursor inside the block, `codeField` instantly reverts it to source, and `dblclick` never gets dispatched.
+One sentence: **if "cursor inside the block" is what reveals the source, the mouse event must be intercepted at the `mousedown` stage.**
+
+**⑧ Resizing rebuilds the whole widget, so selection state can't live in the DOM**
+
+Every width change is a document change → `imageField` recomputes → `ImageWidget` is rebuilt → the old `figure` disappears along
+with its `.selected` class. Keep selection in the DOM and the handle vanishes after the first drag; you'd have to click again to resize twice.
+So selection lives in `selectedImageField` (a `StateField<number>` holding the line start), and the rebuilt widget re-applies the class
+from it. The resize transaction carries a `setSelectedImageEffect.of(line.from)` so selection survives. Likewise, **don't** dispatch
+a transaction per pixel while dragging — only update inline styles and `dispatch` once on `mouseup`.
+
+**⑨ Putting a "separator" class on a button squashes it to 1px**
+
+The toolbar needs a vertical line before "edit". The first version lazily added a `sep` class (`width:1px`) to the button itself, so the
+button became 1px wide and its label overflowed and got clipped. A separator must be **its own empty element**. The smoke assertion
+`overflow: tb.scrollWidth - tb.clientWidth` exists for this.
+
+**⑩ After a code block becomes a block widget, tables and images inside it must be skipped**
+
+Once a code block is a block widget, if it contains `| a | b |`, `tableBlocksField` will try to replace those lines with a table
+widget — two block-level replaces with overlapping ranges make CodeMirror throw and blank the page.
+So `collectTables()` / `collectImages()` both compute `fenceMask()` first and skip every line inside a fence.
+`code={… "tables":0}` in the smoke output guards this.
+
+**⑪ Link clicks must intercept `mousedown` in the capture phase**
+
+CodeMirror's own `mousedown` is bound on `contentDOM`; by the time the event bubbles to `view.dom`, it has already moved the cursor
+into that line. The cursor entering the line reverts it to source, the link `<span>` is replaced on the spot, and `target` no longer
+matches at `click` time. So `linkPlugin` uses `addEventListener('mousedown', fn, true)` and does `preventDefault + stopPropagation`
+on a hit.
+
+**⑫ A note at the vault root has `folder` = "收集箱" but is not in that folder**
+
+In `toNote()`, `folder: rawFolder || DEFAULT_FOLDER`: a `.md` dropped straight into the vault root gets the display folder "收集箱"
+(Inbox), while its `relPath` is still `xxx.md`. Any code that **builds a file path from `note.folder`** will move those files into
+the Inbox (this bit us on title renames and folder renames). All file operations must use `dirOf(note.relPath)`; `note.folder` is for display only.
+
+**⑬ Folder rename only moves files — empty subfolders stay behind**
+
+`vault.rename()` is `fs.renameSync`, which only moves files. After `技术/子目录/深层.md` moves away, `技术/子目录/` **still exists as an
+empty directory**, so the "reclaim the old folder" logic sees entries inside and refuses to delete — the old folder lingers forever.
+`vault.prune()` must **recurse down to remove empty subfolders first**, then walk back up, and only delete empty ones.
 
 ---
 
-## 4. 开发时容易踩的坑
+## 5. Known limitations
 
-**① `-webkit-app-region: drag` 是窗口级命中区域，不认 z-index**
-
-无边框窗口靠 CSS 拖动区来拖。这个区域的矩形是按布局算出来的，**盖在它上面的元素也照样收不到鼠标事件**。
-曾经把右栏的占位元素 `.blank`（`flex:1`，铺满整列）标成 `drag`，结果设置弹窗的右半边和右上角关闭按钮
-全部点不动——因为那块区域被窗口拖动接管了。
-
-规则：只给窄条顶栏挂 `drag`，绝不给铺满大面积的元素挂；弹层 `.backdrop` 一律 `no-drag`
-（`no-drag` 会从 `drag` 区域里挖掉，所以弹窗一开，底下所有拖动区自动失效）。
-
-顺带一提：`webContents.sendInputEvent()` 是在渲染进程输入层注入的，**绕过了窗口级命中测试**，
-所以用它在冒烟测试里点按钮，测不出这类 bug。这种问题只能靠断言 `getComputedStyle(el).webkitAppRegion`。
-
-**② vite 的 `emptyOutDir` 会一次性 `rmSync` 整个目录**
-
-`dist/assets` 里有 200 多个字体分片，一次删这么多会被沙箱/杀软的批量删除守卫拦下来，构建直接失败。
-所以 `vite.config.ts` 里设成 `emptyOutDir:false`，改由 `scripts/clean-dist.mjs` 逐个 `unlinkSync`。
-
-**③ block 级 `Decoration.replace` 只能由 `StateField` 提供**
-
-CodeMirror 6 里整块替换（表格、图片）必须放在 `StateField` 的 `provide` 里；
-用 `ViewPlugin` 提供会**静默失效**——不报错，`errors=none`，就是整片空白。
-所以 `live-preview.ts` 里是 `tableBlocksField + tableField`、`imageBlocksField + imageField` 两对字段，
-`ViewPlugin` 只负责「光标在块内」时的源码样式，两边不能重复装饰同一行。
-
-**④ 浮层（`position:fixed`）会盖住弹层自己的按钮**
-
-「整理」弹层里标签栏紧挨着「取消 / 保存」。第一版给标签做了个下拉候选菜单，
-结果菜单正好压在这两个按钮上，用户点保存反而往笔记里加了个标签。
-最后改成**弹层内部的一排淡色 chips**：点一下就加，既不用浮层也不会点穿。
-以后往弹层里加浮层控件，先想想它会不会盖住底部按钮。
-
-**⑤ 拖拽排序和左滑共用一套指针手势**
-
-同一个 `pointerdown` 只能是一种意图。`mid.ts` 里用 `mode` 状态机在第一次移动超过 6px 时定方向：
-竖向意图 → 调顺序，横向意图 → 左滑操作条。**方向一旦锁定就不再改**，否则手一抖就跳模式。
-排序落点还要夹在同一个置顶分组内（`clampToGroup`），跨组插进去会被排序规则立刻弹回来。
-
-**⑥ Windows 上的 `.md` 是 CRLF，`split(/\n{2,}/)` 切不开它**
-
-「卡片内容有时候不显示」这个 bug 的根因就在这里。用记事本或别的编辑器改过的文件是 `\r\n`，
-而 `split(/\n{2,}/)` 只认 `\n\n`，整篇会被当成**一个块**；接着「首块是标题就丢掉」这条规则
-又把这个唯一的块整块扔了，摘要直接空掉。表格认不出、图片块认不出，也是同一个原因。
-
-修法是在**入口处归一化一次**：`parseFrontMatter()` 里 `raw.replace(/\r\n?/g, '\n')`。
-下游所有「按空行切块」的逻辑（摘要、表格、图片）就都好了。写回时 `serializeFrontMatter()`
-一律用 `\n`，所以不会反复横跳。以后凡是「从磁盘读进来按行处理」的代码，都先想一下换行符。
-
-**⑦ 「单击图片变源码」不是自己写的，是 CodeMirror 干的**
-
-以前 `ImageWidget` 里只挂了个 `clickToEdit`，但真正把光标挪进图片行的其实是 CodeMirror 自己的
-`mousedown` 处理——光标落进被替换的那一行，`buildImages` 就把整行换回源码了。
-所以光删掉 `clickToEdit` 没用，必须在 `figure` 上 `mousedown` 就 `preventDefault()` +
-`stopPropagation()`，把事件拦在 `contentDOM` 之前。拦住之后单击才有机会只是「选中」。
-
-代码块后来改成双击进源码，踩的是**同一个坑**：`dblClickToEdit()` 同样得先吃掉 `mousedown`，
-否则单击就把光标塞进块里，`codeField` 立刻把整块换回源码，`dblclick` 还没来得及派发。
-一句话：**只要「光标在块内」是露出源码的条件，鼠标事件就必须在 `mousedown` 阶段拦下来。**
-
-**⑧ 改宽度会重建整个 widget，选中态不能存在 DOM 上**
-
-改一次宽度就是一次文档变更 → `imageField` 重算 → `ImageWidget` 重建 → 旧的 `figure` 连同
-`.selected` 这个 class 一起没了。如果把选中态放在 DOM 上，用户拖完一次把手就消失，想再拖还得重新点。
-
-所以选中态放在 `selectedImageField`（`StateField<number>`，存行首位置），widget 重建后照着它重新
-加 class。改宽度的事务里再顺手带一个 `setSelectedImageEffect.of(line.from)`，选中态就续上了。
-同理，拖动过程中**不要**每移动 1px 就发一次事务——只改内联样式，`mouseup` 才 `dispatch` 一次。
-
-**⑨ 往按钮上挂「分隔线」的 class 会把它压成 1px**
-
-工具条里「编辑」前面要一条竖线，第一版图省事给它加了 `sep` 类（`width:1px`），结果按钮本身变成
-1px 宽，文字整段溢出到工具条外面被裁掉。分隔线得是**独立的一个空元素**。
-冒烟里那句 `overflow: tb.scrollWidth - tb.clientWidth` 就是为这个加的。
-
-**⑩ 代码块整块替换之后，块里的表格 / 图片必须跳过**
-
-代码块换成 block widget 之后，如果块里还有 `| a | b |`，`tableBlocksField` 也会把这几行换成表格 widget——
-两个 block 级 replace 范围重叠，CodeMirror 直接抛错，整页空白。
-所以 `collectTables()` / `collectImages()` 都要先算一遍 `fenceMask()`，围栏里的行一律跳过。
-冒烟里 `code={… "tables":0}` 就是守这个的。
-
-**⑪ 点链接要在**捕获阶段**拦 `mousedown`**
-
-CodeMirror 自己的 `mousedown` 挂在 `contentDOM` 上，等事件冒泡到 `view.dom` 时，它已经把光标挪进这一行了；
-光标一进这一行，整行切回源码，链接的 `<span>` 当场被替换掉，`click` 时 target 已经对不上。
-所以 `linkPlugin` 用 `addEventListener('mousedown', fn, true)`，命中就 `preventDefault + stopPropagation`。
-
-**⑫ 库根上的笔记 `folder` 是「收集箱」，但文件不在收集箱里**
-
-`toNote()` 里 `folder: rawFolder || DEFAULT_FOLDER`：直接丢在笔记库根目录的 `.md`，展示用的 folder 会退化成
-「收集箱」，`relPath` 却是 `xxx.md`。任何**用 `note.folder` 去拼文件路径**的代码都会把这些文件搬进收集箱
-（改标题、改目录名都踩过这个坑）。所以文件操作一律用 `dirOf(note.relPath)`，`note.folder` 只用来显示。
-
-**⑬ 目录改名只搬文件，空子目录会留下**
-
-`vault.rename()` 是 `fs.renameSync`，只搬文件。`技术/子目录/深层.md` 搬走之后，`技术/子目录/` 这个**空目录**还在，
-于是「收走旧目录」的逻辑看到目录里还有条目就不敢删了，旧目录永远留着。
-`vault.prune()` 必须**递归往下先收空子目录**，再往上收父目录，而且只删空目录。
+- Syntax highlighting is a hand-written lexer (`src/editor/highlight.ts`). It covers common languages but is **not a full parser**:
+  no multi-line string continuations, no JS inside template strings, no heredocs. Extreme code may color inaccurately (the text itself is fine).
+- Code blocks render as a whole, so **to select and copy text inside one you must double-click into source first**; to copy the entire
+  block use the "copy" button at its top right.
+- `[[title]]` fuzzy title matching only accepts a **unique result**; with two notes of the same name it falls back to path matching.
+- The filename rename triggered by a title change has a 1.4 s debounce — quitting immediately after editing may skip the rename
+  (the content itself is saved).
+- Images must be alone on their line to render. Width supports `{width=320}` / `{width=50%}`, but that's this app's own extension;
+  other Markdown editors show it as plain text.
+- Tables and images render as blocks, so text inside them doesn't participate in search highlighting (the "N matches" count still includes it).
+- Card thumbnails are a fixed 96px tall. A single image keeps its aspect ratio, so very wide images stop at the card width (scaled down
+  beyond that) and very tall ones look narrow; two or more share a row evenly, at most 3 visible (`cover`-cropped to one box), with the
+  4th onward collapsed into `+N`. The card doesn't say which images those are and they can't be opened from there.
+- **The password lock is not encryption**: notes stay plaintext `.md` on disk and the lock only gates "opening this app".
+  Real confidentiality needs an OS account password / BitLocker / an encrypted volume.
+- The locked state gates the UI, not the files: while locked, other programs can still read the note files.
+- A forgotten password can only be fixed by hand in `settings.json` (clear `lockHash`, set `lockEnabled` to `false`); there is no recovery flow in the app.
+- `.md` files sitting directly in the vault **root** are shown under "收集箱" in the UI (the files themselves don't move).
+  Renaming "收集箱" in that state will not move them — file operations use the real path, see pitfall ⑫.
+- Changes made by external editors appear only after switching away from the window and back (no file watching).
+- Moving or deleting image files doesn't clean up references in note bodies (you just see "image not found" at render time).
+- In browser mode (`npm run dev`) images live in localStorage with a 5 MB cap — enough for debugging only.
+- The Electron build is 278 MB packaged (Tauri would be ~8 MB but needs Rust).
+- Autostart registers `electron.exe` in dev mode and points at `Notes.exe` once packaged.
 
 ---
 
-## 5. 已知限制
+## 6. FAQ
 
-- 代码高亮是自己写的词法着色（`src/editor/highlight.ts`），覆盖常见语言，但**不是完整语法分析**：
-  没有多行字符串续行、模板字符串里嵌 JS、heredoc 这类处理，极端写法可能着色不准（不影响文字内容）。
-- 代码块是整块渲染的，**块里的文字要先双击进源码才能选中复制**；要复制整段用块右上角的「复制」按钮。
-- `[[标题]]` 按标题模糊匹配时只认**唯一结果**；有两篇同名笔记就会退回到按路径匹配。
-- 改标题触发的文件改名有 1.4 秒防抖，改完马上退出应用可能不会改名（内容本身是保存了的）。
-- 图片必须单独占一行才渲染。宽度支持 `{width=320}` / `{width=50%}`，但这是本应用自己的扩展，
-  别的 Markdown 编辑器会把它当普通文字显示。
-- 表格和图片是整块渲染的，块里的文字不参与搜索高亮（「N 处匹配」仍会计数）。
-- 卡片缩略图固定 96px 高。单图宽度按原图比例，所以特别宽的图会顶到卡片宽度为止（再宽就等比缩），
-  特别高的图会显得窄；两张以上均分一行、最多露 3 张（`cover` 裁成同一块），第 4 张起收进 `+N`，
-  卡片上不显示具体是哪几张、也点不开。
-- **密码锁定不是加密**：笔记仍然是磁盘上的明文 `.md`，锁只挡住「打开这个应用」这一步。
-  真要保密得靠系统账户密码 / BitLocker / 把库放到加密盘上。
-- 锁定状态只拦界面，不拦文件：锁着的时候笔记文件照样能被别的程序读写。
-- 忘了密码只能手动改 `settings.json`（把 `lockHash` 清空、`lockEnabled` 改成 `false`），应用里没有找回流程。
-- 直接放在笔记库**根目录**的 `.md`，界面上会归到「收集箱」这一栏里（文件本身没动）；
-  这时改名「收集箱」不会移动这些文件——文件操作走的是真实路径，见坑 ⑫。
-- 外部改文件后需要切走再切回窗口才会刷新（没接文件监听）。
-- 移动/删除图片文件不会同步清理正文里的引用（只在渲染时显示「找不到图片」）。
-- 浏览器模式（`npm run dev`）的图片存在 localStorage 里，5MB 上限，仅够调试。
-- Electron 版打包后 278MB（Tauri 版约 8MB，但要 Rust）。
-- 开机自启在开发模式下注册的是 `electron.exe`，打包后指向 `Notes.exe`。
+**`cd notes-app` says the path doesn't exist**
 
----
-
-## 6. 常见问题
-
-**`cd notes-app` 报「路径不存在」**
-
-完整路径里有空格，必须加引号：
+The full path contains spaces, so it must be quoted:
 
 ```powershell
 cd "D:\我的项目\notes-app"
 ```
 
-**`npm run desktop` 报 `Cannot read properties of undefined (reading 'registerSchemesAsPrivileged')`**
+**`npm run desktop` fails with `Cannot read properties of undefined (reading 'registerSchemesAsPrivileged')`**
 
-环境变量里设了 `ELECTRON_RUN_AS_NODE=1`，Electron 被当成纯 Node 跑了。清掉再启动：
+`ELECTRON_RUN_AS_NODE=1` is set in the environment, so Electron runs as plain Node. Clear it and retry:
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = $null
 npm run desktop
 ```
 
-**`npm run desktop:pack` 报 `ECONNRESET`**
+**`npm run desktop:pack` fails with `ECONNRESET`**
 
-打包工具想联网重下 Electron。脚本已经优先用本地缓存（`%LOCALAPPDATA%\electron\Cache`），
-如果还是失败，先 `npm install electron` 让缓存落地，再重试。
+The packager is trying to re-download Electron. The script already prefers the local cache (`%LOCALAPPDATA%\electron\Cache`);
+if it still fails, run `npm install electron` to populate the cache, then retry.
 
-**`npm run app:dev`（Tauri）报 `linker 'link.exe' not found`**
+**`npm run app:dev` (Tauri) fails with `linker 'link.exe' not found`**
 
-Windows SDK 没装或版本不对。VS Installer → 单个组件 → 勾 **Windows 11 SDK (10.0.22621.0)**，然后重开终端。
+The Windows SDK is missing or the wrong version. VS Installer → Individual components → check **Windows 11 SDK (10.0.22621.0)**,
+then reopen the terminal.
 
-**打包体积太大**
+**The package is huge**
 
-278MB 里 181MB 是 Electron 自带的 Chromium + Node 运行时，这部分砍不掉，除非换 Tauri。
-你自己的代码 + 离线字体打成的 `resources\app.asar` 只有 10.4MB。
+181 MB of the 278 MB is Electron's bundled Chromium + Node runtime; that can't be trimmed without switching to Tauri.
+Your own code and the offline fonts make up `resources\app.asar`, only 10.4 MB.
 
-还想再小一点：把 `src/styles/index.css` 里 `lxgw-wenkai-webfont` 那两行 `@import` 删掉，
-字体选项会自动回落到系统字体，asar 能降到 2MB 左右。
+To go smaller: remove the two `@import` lines for `lxgw-wenkai-webfont` in `src/styles/index.css`. The font option falls back to
+system fonts automatically and the asar drops to roughly 2 MB.
 
-**双击新版的 `Notes.exe` 没反应，反而跳出来旧窗口**
+**Double-clicking the new `Notes.exe` does nothing and the old window comes forward instead**
 
-旧版还在后台运行，占着「同一时间只能开一个实例」的锁，新进程一启动就被拒绝了，
-系统反而把旧窗口唤到前面，看起来就像"新版本没生效"。
+The old version is still running and holds the "only one instance" lock, so the new process is rejected and the system raises the
+existing window — which looks exactly like "the new version didn't take effect".
 
-两个进程同时写同一批 `.md` 会互相覆盖，所以这个锁不能去掉。处理办法：
-右键任务栏右下角的托盘图标 → 退出，再双击新的 `Notes.exe`。
+Two processes writing the same `.md` files would clobber each other, so the lock can't be removed. The fix: right-click the tray
+icon in the notification area → Quit, then double-click the new `Notes.exe`.
 
-新版现在会弹一个提示框说明这件事，不会再有"点了毫无反应"的情况。
+Newer builds show a dialog explaining this, so "clicked and nothing happened" no longer occurs.
 
-**窗口没有标题栏，怎么拖 / 怎么关**
+**There's no title bar — how do I drag or close the window?**
 
-标题栏是故意去掉的。拖窗口：按住三栏顶部那一条空白（左栏「笔记」那一行、中栏标题行、右栏面包屑行）拖。
-关 / 最大化 / 最小化：右上角自绘的 `— □ ✕`。双击顶部空白也能最大化。
+The title bar is intentionally gone. To drag: press and hold the empty strip along the top of the three panes (the "笔记" row in the
+left pane, the middle pane's header row, the right pane's breadcrumb row). Close / maximize / minimize: the `— □ ✕` at top right.
+Double-clicking the top strip also maximizes.
 
-**表格点了没反应，改不了**
+**Clicking a table does nothing and I can't edit it**
 
-单击表格会把光标放进去、整块变成 Markdown 源码，这时候就能改；点别处又变回表格。
-如果你只是拖选复制文字，不会触发编辑。
+A single click puts the cursor in and turns the block into Markdown source — that's when you can edit it; click elsewhere to render
+it back. If you only drag-select text, editing is not triggered.
 
-**`npm run desktop:pack` 报 `SAFE_DELETE_BULK_CONFIRM_REQUIRED` 或 `EPERM`**
+**`npm run desktop:pack` fails with `SAFE_DELETE_BULK_CONFIRM_REQUIRED` or `EPERM`**
 
-旧产物目录删不掉（被删除守卫拦下，或 Defender 正在扫那个 181MB 的 exe）。
-打包脚本已经不用「删旧目录」这套了：先打到系统临时目录，再逐文件覆盖过去，全程不删东西。
-如果目标 exe 正在运行，会自动改写到 `dist-app-2\`。
+The old output directory can't be deleted (blocked by a delete guard, or Defender is scanning that 181 MB exe).
+The packaging script no longer deletes anything: it packs into the system temp directory first, then overwrites file by file.
+If the target exe is running, it writes to `dist-app-2\` instead.
 
-**Tauri 版托盘 API 报 `no method named show_menu_on_left_click`**
+**The Tauri build fails with `no method named show_menu_on_left_click`**
 
-Tauri 2.x 早期版本叫 `menu_on_left_click`。改 `src-tauri/src/lib.rs` 那一行的方法名，
-或者直接删掉，左键点托盘会弹菜单而不是显示窗口。
+Early Tauri 2.x called it `menu_on_left_click`. Rename that method in `src-tauri/src/lib.rs`, or delete the line — left-clicking the
+tray then shows the menu instead of the window.
+
+
+
