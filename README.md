@@ -1,5 +1,8 @@
 # 笔记 · 桌面版
 
+> **下载**：[v0.1.0 · Windows x64](https://github.com/JeffreyXXL/notes-app/releases/latest)
+> —— 解压后双击 `Notes.exe`，不用装 Node、不用命令行、不联网。
+
 三栏 Markdown 笔记应用。前端是 **Vite + TypeScript + CodeMirror 6**（无框架，手写原生 DOM），桌面外壳做了两套，共用同一份前端、同一套命令契约、同一个笔记库目录：
 
 | 外壳 | 体积 | 编译要求 | 现状 |
