@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-> **Download**: [v0.1.0 · Windows x64](https://github.com/JeffreyXXL/notes-app/releases/latest)
+> **Download**: [latest release · Windows x64](https://github.com/JeffreyXXL/notes-app/releases/latest)
 > — unzip and double-click `Notes.exe`. No Node, no command line, no network.
 
 A three-pane Markdown note app. The front end is **Vite + TypeScript + CodeMirror 6** (no framework, hand-written DOM), and there are two desktop shells sharing the same front end, the same command contract, and the same vault directory:
