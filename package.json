@@ -1,7 +1,7 @@
 {
   "name": "notes-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "三栏 Markdown 笔记桌面应用（Electron / Tauri 双外壳 + Vite + TypeScript）",
