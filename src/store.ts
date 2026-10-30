@@ -647,14 +647,16 @@ function queueNameSync(note: Note): void {
 /** 别的笔记里指向它的链接跟着改，改完两篇都写盘 */
 async function rewriteLinks(oldName: string, newName: string, oldRel: string, newRel: string): Promise<void> {
   const rx = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const wiki = new RegExp('\\[\\[' + rx(oldName) + '\\]\\]', 'g');
+  // `[[标题]]` 和 `[[目录/标题]]` 都要跟着改：开了「笔记链接带完整目录」之后，
+  // 链接里会带上一段目录前缀，只认裸标题的话改完名字链接就断了
+  const wiki = new RegExp('\\[\\[([^\\[\\]\\n]*/)?' + rx(oldName) + '\\]\\]', 'g');
   const mdWith = new RegExp('\\(' + rx(oldRel) + '\\)', 'gi');
   const mdNoExt = new RegExp('\\(' + rx(stripMd(oldRel)) + '\\)', 'gi');
   const newNoExt = stripMd(newRel);
 
   for (const n of store.notes) {
     let c = n.content;
-    c = c.replace(wiki, `[[${newName}]]`);
+    c = c.replace(wiki, (_m, pre?: string) => `[[${pre || ''}${newName}]]`);
     c = c.replace(mdWith, `(${newRel})`);
     c = c.replace(mdNoExt, `(${newNoExt})`);
     if (c === n.content) continue;

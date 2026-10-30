@@ -782,7 +782,11 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // 冒烟时窗口常被别的窗口挡住，Chromium 一进「不可见」就把定时器节流到 1s，
+      // 那些「等 400ms 再量」的断言会读到动画中间态（图宽、代码块行数都会飘）。
+      // 正常使用不关，免得后台一直占 CPU
+      backgroundThrottling: !SMOKE
     }
   });
 
@@ -1025,6 +1029,9 @@ function runSmoke() {
         let enterOk = false;
         // 第 45 轮：`==高亮==`
         let hlOk = false;
+        // 第 46 轮：链接走蓝色系、带完整目录、面包屑字号
+        let wikiPathOk = false;
+        let crumbOk = false;
 
         // 设置面板：必须在「什么都没选中」的状态下用真鼠标点。
         // 这个状态下右栏是铺满整列的 .blank 占位元素。它一旦被标成
@@ -2630,6 +2637,77 @@ function runSmoke() {
           hlOk = !!hl && hl.text === '重点' && !hl.line.includes('==')
             && !!hl.bg && hl.bg !== 'rgba(0, 0, 0, 0)' && hl.bg !== 'transparent';
 
+          // (e) 笔记链接：默认写成 `[[目录/标题]]`，关掉开关只剩 `[[标题]]`；
+          // 同时确认链接是蓝色系（石墨配色以前是红的），面包屑字号也放大了
+          const press = k => js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            if (!c) return 'nocontent';
+            const code = { ArrowUp: 38, ArrowDown: 40, End: 35, Enter: 13 };
+            c.dispatchEvent(new KeyboardEvent('keydown', {
+              key: ${JSON.stringify(k)}, code: ${JSON.stringify(k)},
+              keyCode: code[${JSON.stringify(k)}], which: code[${JSON.stringify(k)}],
+              bubbles: true, cancelable: true
+            }));
+            return 'ok';
+          })()`);
+          const clickWiki = () => js(`(() => {
+            const b = document.querySelector('.qb-btn[data-qb="wikilink"]');
+            if (!b) return 'nobtn';
+            b.click();
+            return 'ok';
+          })()`);
+          // 不能读 `.cm-line` 的 textContent：光标不在那行时，`[[ ]]` 已经被
+          // Decoration 切掉了，文本里根本看不到方括号。所以照旧读磁盘
+          await press('End');       // 折叠掉「笔记名」的选区，别让下一次回车吃掉它
+          await press('Enter');
+          await wait(300);
+          await clickWiki();
+          await wait(500);
+
+          // 关掉「带完整目录」再插一次
+          await js("document.getElementById('sw-linkpath').click()");
+          await wait(250);
+          await press('End');
+          await press('Enter');
+          await wait(300);
+          await clickWiki();
+          // 写盘防抖 450ms，多等一会儿再读
+          await wait(1600);
+          await js("document.getElementById('sw-linkpath').click()");
+          await wait(250);
+
+          // 光标停在新建的那行上，带目录的那条才是渲染态
+          const wiki = await js(`(() => {
+            const el = document.querySelector('#editor-host .cm-wikilink');
+            if (!el) return null;
+            const cs = getComputedStyle(el);
+            const m = /rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/.exec(cs.color) || [];
+            return {
+              text: el.textContent, color: cs.color,
+              r: +m[1] || 0, g: +m[2] || 0, b: +m[3] || 0
+            };
+          })()`);
+          const crumb = await js(`(() => {
+            const el = document.querySelector('.doc-head .crumb');
+            return el ? { px: parseFloat(getComputedStyle(el).fontSize), text: el.textContent } : null;
+          })()`);
+
+          const linkBody = editFile ? readFile(editFile) : '';
+          const dir = editFile ? editFile.split('/').slice(0, -1).join('/') : '';
+          const wantOn = `[[${dir ? dir + '/' : ''}笔记名]]`;
+          // 上一行是待办/有序列表时，回车会把链接续成列表项，先剥掉前缀再比
+          const plain = s => s.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '').trim();
+          const lines = linkBody.split('\n').map(plain);
+          const onOk = lines.includes(wantOn);
+          const offOk = lines.includes('[[笔记名]]');
+          console.log('SMOKE link=' + JSON.stringify({
+            wantOn, onOk, offOk, tail: linkBody.slice(-64), wiki, crumb
+          }));
+          // 蓝色判定：蓝通道明显压过红绿。旧的红色 `#d94a4a` 会被这条挡下来
+          wikiPathOk = onOk && offOk
+            && !!wiki && wiki.b >= wiki.g + 40 && wiki.b >= wiki.r + 60;
+          crumbOk = !!crumb && crumb.px >= 12.5;
+
           // 测试笔记别留在副本里（--demo 会重新播种，但真实库副本要干净）
           for (const p of [folderFile, editFile]) {
             if (!p) continue;
@@ -2646,13 +2724,13 @@ function runSmoke() {
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
-          && railOk && newNoteCtxOk && enterOk && hlOk;
+          && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
-          newNoteCtxOk, enterOk, hlOk
+          newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {

@@ -50,8 +50,10 @@ html,body{height:100%}
   --hl:#fdf0c4;
   --hl-hit:#ffe89a;
   --mark:#ffdfb2;
-  --link:#4a52c4;
-  --link-line:#d6d8f2;
+  /* 链接固定走蓝色系：六套配色都往蓝里靠，红/绿链接会读成「报错」 */
+  --link:#2f5fd0;
+  --link-line:#ccd9f2;
+  --link-bg:#edf2fc;
   --shadow:rgba(0,0,0,.07);
   --shadow-lg:rgba(0,0,0,.2);
   --shadow-card:0 1px 3px rgba(0,0,0,.05);
@@ -133,8 +135,9 @@ html[data-theme="dark"]{
   --hl:#4c401d;
   --hl-hit:#5f4d20;
   --mark:#5a4420;
-  --link:#93a0f2;
-  --link-line:#3b4064;
+  --link:#8ab2f5;
+  --link-line:#2f3b56;
+  --link-bg:#1c2434;
   --shadow:rgba(0,0,0,.5);
   --shadow-lg:rgba(0,0,0,.65);
   --shadow-card:0 1px 3px rgba(0,0,0,.3);
@@ -192,8 +195,9 @@ html[data-scheme="cream"]{
   --hl:#d9ecd2;
   --hl-hit:#c3e2b8;
   --mark:#cfe6bd;
-  --link:#4c7f5f;
-  --link-line:#cfe3d3;
+  --link:#2f6bab;
+  --link-line:#cfdff0;
+  --link-bg:#eaf2fa;
   --shadow:rgba(92,72,32,.09);
   --shadow-lg:rgba(60,46,20,.24);
   --shadow-card:0 1px 3px rgba(92,72,32,.07);
@@ -241,8 +245,9 @@ html[data-scheme="cream"][data-theme="dark"]{
   --hl:#3d4a2c;
   --hl-hit:#4b5c35;
   --mark:#3e4f2d;
-  --link:#a9d3b0;
-  --link-line:#3a4a37;
+  --link:#94c0e8;
+  --link-line:#2f4258;
+  --link-bg:#1c2531;
   --shadow:rgba(0,0,0,.5);
   --shadow-lg:rgba(0,0,0,.66);
   --shadow-card:0 1px 3px rgba(0,0,0,.32);
@@ -292,8 +297,9 @@ html[data-scheme="graphite"]{
   --hl:#fff2ab;
   --hl-hit:#ffe873;
   --mark:#ffe6a6;
-  --link:#d94a4a;
-  --link-line:#f4cccc;
+  --link:#2b6cb8;
+  --link-line:#ccdcee;
+  --link-bg:#ebf2f9;
   --shadow:rgba(0,0,0,.08);
   --shadow-lg:rgba(0,0,0,.22);
   --shadow-card:0 1px 3px rgba(0,0,0,.06);
@@ -360,8 +366,9 @@ html[data-scheme="graphite"][data-theme="dark"]{
   --hl:#4a3a1c;
   --hl-hit:#5c481f;
   --mark:#51421a;
-  --link:#ef8f8a;
-  --link-line:#55393a;
+  --link:#82b4e6;
+  --link-line:#2f4152;
+  --link-bg:#1a222b;
   --shadow:rgba(0,0,0,.55);
   --shadow-lg:rgba(0,0,0,.68);
   --shadow-card:0 1px 3px rgba(0,0,0,.35);

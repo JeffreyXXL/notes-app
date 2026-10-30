@@ -64,7 +64,7 @@ const CMDS: (Cmd | null)[] = [
   },
   {
     id: 'wikilink',
-    title: '链接到另一篇笔记（[[标题]]）',
+    title: '链接到另一篇笔记（[[目录/标题]]，可在设置里只写标题）',
     icon: svg(`<path d="M6.4 9.6a2.5 2.5 0 003.6 0l1.4-1.4a2.5 2.5 0 00-3.6-3.6" ${stroke}/><path d="M9.6 6.4a2.5 2.5 0 00-3.6 0L4.6 7.8a2.5 2.5 0 003.6 3.6" ${stroke}/><path d="M2.2 2.2h3M2.2 2.2v3M13.8 13.8h-3M13.8 13.8v-3" ${stroke}/>`),
     run: insertWikiLink
   },

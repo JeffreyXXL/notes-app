@@ -74,6 +74,7 @@ export function syncSettingsUI(): void {
 
   el('sw-reveal')?.classList.toggle('on', s.reveal);
   el('sw-title')?.classList.toggle('on', s.titleRename);
+  el('sw-linkpath')?.classList.toggle('on', s.linkPath);
   el('sw-swipe')?.classList.toggle('on', s.swipe);
   el('sw-autostart')?.classList.toggle('on', s.autostart);
   el('sw-lock')?.classList.toggle('on', s.lockEnabled);
@@ -122,6 +123,14 @@ export function initSettingsUI(): void {
     const t = e.currentTarget as HTMLElement;
     store.settings.titleRename = !store.settings.titleRename;
     t.classList.toggle('on', store.settings.titleRename);
+    saveSettings();
+  });
+
+  /* ---- 笔记链接是否带目录 ---- */
+  el('sw-linkpath')?.addEventListener('click', e => {
+    const t = e.currentTarget as HTMLElement;
+    store.settings.linkPath = !store.settings.linkPath;
+    t.classList.toggle('on', store.settings.linkPath);
     saveSettings();
   });
 

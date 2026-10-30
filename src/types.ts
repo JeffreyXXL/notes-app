@@ -60,6 +60,8 @@ export interface Settings {
   midCollapsed: boolean;
   /** 正文 H1 改了就把文件名改成一样的 */
   titleRename: boolean;
+  /** 插入笔记链接时写成 `[[目录/标题]]` 而不是 `[[标题]]`，同名笔记才分得清 */
+  linkPath: boolean;
   /** 左栏目录的手动顺序（库内路径，从前往后） */
   folderOrder: string[];
   /** 左栏标签的手动顺序 */

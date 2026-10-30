@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   leftCollapsed: false,
   midCollapsed: false,
   titleRename: true,
+  linkPath: true,
   folderOrder: [],
   tagOrder: [],
   appName: '笔记',

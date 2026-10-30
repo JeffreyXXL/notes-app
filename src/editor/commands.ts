@@ -9,6 +9,8 @@
 import { EditorView } from '@codemirror/view';
 import type { EditorState } from '@codemirror/state';
 import { codeBlocksField } from './live-preview';
+import { store, noteById, resolveLink } from '../store';
+import { dirOf } from '../core/path';
 
 /** 用 before/after 包住选区；再点一次取消。没有选区时插入一对标记并把光标放中间。 */
 export function toggleWrap(view: EditorView, before: string, after = before, hint = ''): void {
@@ -120,27 +122,56 @@ export function insertBlock(view: EditorView, block: string): void {
 
 /** 插入链接：有选中文字就拿它当链接文字，光标自动落在 url 上 */
 /**
+ * 当前这篇笔记的真实目录（库内相对路径）。
+ *
+ * 不能用 `note.folder`：直接放在库根的笔记，那个字段会退化成「收集箱」
+ * 这个展示用默认值，拿它拼路径会把链接指到一个不存在的目录。
+ */
+function currentDir(): string {
+  const n = noteById(store.state.selectedId);
+  return n ? dirOf(n.relPath) : '';
+}
+
+/** `[[目录/文件名]]`；目录为空时就是 `[[文件名]]` */
+function linkText(relDir: string, name: string): string {
+  return relDir ? `${relDir}/${name}` : name;
+}
+
+/**
  * 插入站内链接 `[[另一篇笔记]]`。
  * 有选中文字就把它当目标（顺手把文字改成链接），没选就留个占位让人直接打字。
+ *
+ * 开了「笔记链接带完整目录」时写成 `[[目录/标题]]`：笔记库按目录分客户，
+ * 不同目录下重名是常态，只写标题点下去会跳到别人的笔记里。
  */
 export function insertWikiLink(view: EditorView): void {
   const sel = view.state.selection.main;
   const doc = view.state.doc;
+  const dir = currentDir();
+  const full = store.settings.linkPath;
 
   if (sel.from === sel.to) {
-    const text = '[[笔记名]]';
+    const ph = '笔记名';
+    const target = full ? linkText(dir, ph) : ph;
+    const text = `[[${target}]]`;
+    // 光标只框住名字部分，目录前缀是已经定好的
+    const start = sel.from + 2 + target.length - ph.length;
     view.dispatch({
       changes: { from: sel.from, insert: text },
-      selection: { anchor: sel.from + 2, head: sel.from + 5 }
+      selection: { anchor: start, head: start + ph.length }
     });
     return;
   }
 
-  const label = doc.sliceString(sel.from, sel.to);
-  const text = `[[${label}]]`;
+  const raw = doc.sliceString(sel.from, sel.to);
+  const label = raw.trim();
+  // 选中的文字如果正好是某篇笔记的名字，就补成它的真实路径
+  const hit = full ? resolveLink(label, dir) : null;
+  const target = hit ? linkText(dirOf(hit.relPath), hit.name) : label;
+  const text = `[[${target}]]`;
   view.dispatch({
     changes: { from: sel.from, to: sel.to, insert: text },
-    selection: { anchor: sel.from + 2, head: sel.from + 2 + label.length }
+    selection: { anchor: sel.from + 2, head: sel.from + 2 + target.length }
   });
 }
 

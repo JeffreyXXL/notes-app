@@ -252,12 +252,15 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 
 - `[[title]]` matches in stages: relative to the current note's folder → vault path → same filename → same title → title contains
   (only if the result is unique). So after a note is renamed, `[[old title]]` still finds it.
+- The quick bar's internal-link button writes the **full path** (`[[客户/项目/标题]]`) by default. The vault is split by customer,
+  so the same title shows up in several folders, and a bare title jumps into whichever one happens to match first. Turn off
+  *笔记链接带完整目录* in Settings → 编辑 to insert `[[title]]` instead. Existing links are never rewritten.
 - In `[text](path.md)` the path can be relative (`./a.md`, `../x/a.md`) or vault-relative.
 - `[text](https://…)` external links open in the system browser, never a new window inside the app.
 - If the target lives in another folder, the archive or the trash, the view switches to one where it's visible — you never get
   "it opened but I can't see it".
 - When nothing matches you get a light toast ("没有找到「xxx」这篇笔记" — no such note), not silence.
-- The quick bar has two link buttons: one inserts an external link `[text](url)`, one inserts an internal link `[[note name]]`.
+- The quick bar has two link buttons: one inserts an external link `[text](url)`, one inserts an internal link `[[folder/note name]]`.
 - To edit the link text: click elsewhere on the line to put the cursor in (the line reverts to source), or move there with arrow keys.
 
 **Todo resolutions**

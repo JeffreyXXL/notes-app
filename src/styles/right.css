@@ -8,7 +8,8 @@
 .app.no-left .doc-head{padding-left:54px}
 .app.no-mid .doc-head{padding-left:54px}
 .app.no-left.no-mid .doc-head{padding-left:90px}
-.doc-head .crumb{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
+/* 面包屑比旁边的日期大一号：它是「这篇在哪个目录」的唯一线索 */
+.doc-head .crumb{color:var(--t3);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
 .doc-head .grow{flex:1}
 .doc-head .hint{color:var(--t5);font-size:11px;white-space:nowrap}
 .doc-head .hint.hit{color:var(--pin-tx);background:var(--pin-bg);padding:2px 7px;border-radius:5px;font-size:10.5px}
@@ -125,7 +126,7 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 .cm-link{color:var(--link);border-bottom:1px solid var(--link-line);cursor:pointer}
 .cm-link:hover{background:var(--sel-bg);border-bottom-color:var(--link)}
 /* `[[另一篇笔记]]` 和普通外链区分一下：加一层很淡的底，一眼看出是站内跳转 */
-.cm-wikilink{background:var(--sel-bg);border-radius:3px;padding:0 2px;border-bottom-style:dotted}
+.cm-wikilink{color:var(--link);background:var(--link-bg);border-radius:3px;padding:0 2px;border-bottom-style:dotted}
 .cm-strike{text-decoration:line-through;color:var(--t4)}
 /* `==高亮==`：整块淡色底，像马克笔划过去。
    斜体那条也是淡色底，所以这里用另一个色相（--mark），两者一眼能分开 */
