@@ -1,0 +1,93 @@
+/* ============================================================
+   基础布局：三栏 grid + 折叠变量
+   ============================================================ */
+body{
+  font-family:var(--font-ui);
+  color:var(--t1);background:var(--bg-main);-webkit-font-smoothing:antialiased;
+  overflow:hidden;font-size:13px;transition:background .2s,color .2s;
+}
+.app{--left-w:238px;--mid-w:342px;position:relative;display:grid;
+  grid-template-columns:var(--left-w) var(--mid-w) 1fr;grid-template-rows:100%;height:100vh;
+  transition:grid-template-columns .24s cubic-bezier(.4,0,.2,1)}
+.app.no-left{--left-w:0px}
+.app.no-mid{--mid-w:0px}
+
+/* 折叠后浮出的恢复按钮 */
+.rail{position:absolute;top:9px;left:calc(var(--left-w) + var(--mid-w) + 8px);z-index:60;
+  display:flex;gap:6px;transition:left .24s cubic-bezier(.4,0,.2,1)}
+.rail-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg-elev);
+  color:var(--t3);cursor:pointer;display:none;align-items:center;justify-content:center;
+  box-shadow:0 1px 3px var(--shadow);transition:.12s;font-family:inherit}
+.rail-btn:hover{color:var(--t1);background:var(--hover)}
+.app.no-left #restore-left{display:flex}
+.app.no-mid #restore-mid{display:flex}
+
+/* 通用滚动条 */
+.tree::-webkit-scrollbar,.mid-list::-webkit-scrollbar,.sheet-body::-webkit-scrollbar{width:9px}
+.tree::-webkit-scrollbar-thumb,.mid-list::-webkit-scrollbar-thumb,.sheet-body::-webkit-scrollbar-thumb{
+  background:var(--scroll);border-radius:9px;border:2.5px solid transparent;background-clip:content-box}
+.tree::-webkit-scrollbar-thumb:hover,.mid-list::-webkit-scrollbar-thumb:hover,.sheet-body::-webkit-scrollbar-thumb:hover{
+  background:var(--scroll-h);background-clip:content-box}
+
+/* 首屏加载遮罩 */
+.boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:var(--bg-main);color:var(--t4);font-size:12.5px;z-index:400;transition:opacity .2s}
+.boot.hide{opacity:0;pointer-events:none}
+
+/* ============================================================
+   无边框窗口：自绘窗口按钮 + 顶部拖动区
+   只在 html[data-shell="desktop"] 下生效，浏览器里完全隐藏
+   ============================================================ */
+
+.win-ctrls{display:none}
+
+html[data-shell="desktop"]:not([data-os="mac"]) .win-ctrls{
+  display:flex;align-items:center;gap:1px;
+  position:fixed;top:0;right:0;height:47px;padding-right:9px;
+  z-index:120;-webkit-app-region:no-drag;
+}
+html[data-shell="desktop"] .win-btn{
+  width:29px;height:29px;padding:0;border:0;border-radius:7px;background:transparent;
+  color:var(--t3);cursor:pointer;display:grid;place-items:center;
+  transition:background .13s,color .13s;-webkit-app-region:no-drag;
+}
+html[data-shell="desktop"] .win-btn:hover{background:var(--hover);color:var(--t1)}
+html[data-shell="desktop"] .win-btn:active{background:var(--hover-soft)}
+html[data-shell="desktop"] .win-btn.close:hover{background:#e05252;color:#fff}
+html[data-shell="desktop"] .win-btn.close:active{background:#c84343}
+/* 最大化状态换图标 */
+html[data-shell="desktop"] .win-btn .ic-restore{display:none}
+html[data-shell="desktop"] .win-btn.is-max .ic-max{display:none}
+html[data-shell="desktop"] .win-btn.is-max .ic-restore{display:block}
+
+/* 拖动区：把三条顶栏的空白变成窗口拖动把手。
+   里面的可交互元素必须 no-drag，否则点不动。
+
+   注意：Electron 的 -webkit-app-region 是「窗口级命中区域」，按布局算出来的矩形，
+   不认 z-index。只要某块区域被标成 drag，盖在它上面的弹层也照样收不到鼠标事件。
+   所以这里只给窄条顶栏挂 drag，绝不给铺满整列的占位元素挂。 */
+html[data-shell="desktop"] .brand,
+html[data-shell="desktop"] .mh-top,
+html[data-shell="desktop"] .doc-head{-webkit-app-region:drag;user-select:none}
+html[data-shell="desktop"] .brand .tgl,
+html[data-shell="desktop"] .mh-top .tgl,
+html[data-shell="desktop"] .mh-top #mid-action,
+html[data-shell="desktop"] .doc-head .pill{-webkit-app-region:no-drag}
+
+/* 弹层永远可点：backdrop 铺满全屏，no-drag 会把底下所有拖动区整体挖掉 */
+html[data-shell="desktop"] .backdrop{-webkit-app-region:no-drag}
+
+/* 右上角让出窗口按钮的位置，免得标签被压住 */
+html[data-shell="desktop"]:not([data-os="mac"]) .col-right .doc-head{padding-right:112px}
+/* macOS 的 hiddenInset 会在左上角留红绿灯 */
+html[data-shell="desktop"][data-os="mac"] .brand{padding-left:78px}
+
+/* ============================================================
+   轻提示（点了找不到的链接之类）
+   ============================================================ */
+#toast{position:fixed;left:50%;bottom:38px;transform:translate(-50%,10px);
+  background:var(--accent);color:var(--accent-tx);font-size:12.5px;line-height:1;
+  padding:9px 15px;border-radius:8px;box-shadow:0 6px 20px var(--shadow-lg);
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:900;
+  max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:.96;transform:translate(-50%,0)}

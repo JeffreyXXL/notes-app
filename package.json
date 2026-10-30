@@ -1,0 +1,38 @@
+{
+  "name": "notes-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "description": "三栏 Markdown 笔记桌面应用（Electron / Tauri 双外壳 + Vite + TypeScript）",
+  "author": "notes-app",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && node scripts/clean-dist.mjs && vite build",
+    "preview": "vite preview",
+    "desktop": "npm run build && electron .",
+    "desktop:smoke": "electron . --smoke",
+    "desktop:shots": "npm run build && electron . --smoke --demo",
+    "desktop:pack": "npm run build && node electron/pack.mjs",
+    "test:io": "node --test electron/vault.test.cjs",
+    "tauri": "tauri",
+    "app:dev": "tauri dev",
+    "app:build": "tauri build"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.5",
+    "@fontsource/inter": "^5.1.0",
+    "@tauri-apps/api": "^2.4.0",
+    "lxgw-wenkai-webfont": "^1.7.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "@tauri-apps/cli": "^2.4.0",
+    "electron": "^33.2.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0"
+  }
+}

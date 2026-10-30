@@ -1,0 +1,131 @@
+/* ============================================================
+   中栏：标题栏 / 搜索 / 卡片列表 / 左滑操作条
+   ============================================================ */
+.col-mid{border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0;min-height:0;
+  background:var(--bg-mid);overflow:hidden}
+.col-mid>*{min-width:342px}
+.app.no-mid .col-mid{border-right-color:transparent}
+
+.mid-head{flex:none;padding:16px 16px 12px;border-bottom:1px solid var(--border-soft)}
+.mh-top{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px}
+.mh-top .tt{flex:1;min-width:0}
+.mh-top h2{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--t1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mh-top .n{font-size:11.5px;color:var(--t4);margin-top:2px}
+#mid-action{display:flex;align-items:center;gap:6px;flex:none}
+#mid-action .btn{white-space:nowrap}
+
+.search{display:flex;align-items:center;gap:7px;background:var(--chip-bg);border-radius:8px;padding:6px 9px;
+  border:1px solid transparent;transition:.14s}
+.search:focus-within{background:var(--bg-elev);border-color:var(--border)}
+.search svg{flex:none;color:var(--t4)}
+.search input{flex:1;border:0;background:transparent;outline:0;font-family:inherit;font-size:12.5px;
+  color:var(--t1);min-width:0}
+.search input::placeholder{color:var(--t5)}
+.search .clr{display:none;color:var(--t4);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+.search.has .clr{display:block}
+.search .clr:hover{color:var(--t2)}
+
+.mid-list{flex:1;overflow-y:auto;min-height:0;padding:9px 10px 32px}
+.swipe{position:relative;border-radius:11px;overflow:hidden;margin-bottom:5px}
+/* 收起后延迟隐藏操作条，避免圆角抗锯齿透出红边 */
+.swipe-acts{position:absolute;top:0;right:0;bottom:0;display:flex;align-items:stretch;
+  opacity:0;transition:opacity 0s linear .24s}
+.swipe.open .swipe-acts,.swipe.dragging .swipe-acts{opacity:1;transition:opacity 0s}
+.act{width:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:10.5px;line-height:1;color:#fff;cursor:pointer;user-select:none;letter-spacing:.02em;white-space:nowrap}
+.act svg{opacity:.9}
+.act.pin{background:#b98a3c}
+.act.arc{background:#4d7a6c}
+.act.tag{background:#5c7cb4}
+.act.hide{background:#8a6ea8}
+.act.del{background:#bf564b}
+.act.undo{background:#6d7a8c}
+
+/* 卡片：浮在中栏底色上的一小块，默认就带一点阴影，
+   这样「奶油」色系里米色底 + 白色卡片才有参考图那种层叠感 */
+.card{position:relative;background:var(--bg-elev);padding:12px 14px;border-radius:11px;cursor:pointer;
+  border:1px solid var(--border-soft);box-shadow:var(--shadow-card);
+  transition:background .12s,border-color .12s,box-shadow .12s,transform .22s ease}
+.card:hover{border-color:var(--border);box-shadow:0 2px 7px var(--shadow)}
+.card.active{border-color:var(--sel-border);box-shadow:0 2px 8px var(--shadow)}
+/* 选中态左边一道细色条，一眼看出当前打开的是哪篇 */
+.card.active::before{content:"";position:absolute;left:6px;top:12px;bottom:12px;width:2.5px;
+  border-radius:2px;background:var(--accent);opacity:.75}
+.card-top{display:flex;align-items:flex-start;gap:6px}
+/* 置顶标志：卡片右上角常驻的小徽标，比原来那枚「置顶」文字 pill 更好认 */
+.pin-flag{flex:none;display:flex;align-items:center;justify-content:center;
+  color:var(--pin-tx);background:var(--pin-bg);border-radius:5px;padding:1.5px 3px;margin-top:1px}
+.pin-flag svg{width:11px;height:11px;display:block}
+.card h4{font-size:13.5px;font-weight:600;color:var(--t1);line-height:1.5;margin-bottom:3px;
+  letter-spacing:-.005em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 卡片上的一行目录路径：全部笔记里显示完整路径，钻进某一级目录后只显示剩下的层级 */
+.card-path{display:flex;align-items:center;gap:4px;margin:0 0 5px;min-width:0;
+  font-size:10.5px;color:var(--t5);line-height:1.4}
+.card-path svg{flex:none;width:10px;height:10px;opacity:.75}
+.card-path span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card:hover .card-path{color:var(--t4)}
+.grip{flex:none;color:var(--t5);cursor:pointer;padding:0 4px;font-size:13px;line-height:1.5;border-radius:4px;
+  user-select:none;letter-spacing:.06em;opacity:0;pointer-events:none;
+  transition:opacity .12s,background .12s,color .12s}
+.card:hover .grip,.swipe.open .grip{opacity:1;pointer-events:auto}
+.grip:hover{color:var(--t1);background:var(--hover)}
+/* 卡片预览：摘要在上、图在下，图独占一行。
+   原来是 flex 横排（图 54px 贴在右边），长摘要会被挤成很窄的一条。 */
+.card-body{display:block}
+.card p{font-size:12.5px;color:var(--t3);line-height:1.65;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card p.dim{color:var(--t5)}
+/* 缩略图：**只固定高度**，宽度按图片自己的比例走，上限是卡片宽度。
+   这样每张卡上的图都一样高（一列扫过去是齐的），又不会把图裁掉或者
+   撑成一个左右留白的大空框。笔记里的图多是截图，比例从 1:1 到 3:1 都有，
+   早先固定「100% 宽 + 96 高 + cover」，接近方形的图会被裁掉三分之二、
+   看着像放大了一块，宽图却几乎完整，一列下来像是「每张图大小都不一样」。 */
+.card-thumb{display:block;height:96px;width:auto;max-width:100%;margin:8px 0 0;
+  border-radius:8px;object-fit:contain;
+  border:1px solid var(--border-soft);background:var(--chip-bg)}
+/* 一排缩略图：高度都锁 96px。
+   单图（.solo）宽度跟着图片自己的比例走，不裁；
+   多图（.multi）均分一行、cover 填满，所以同一张卡片里的图永远一样大。 */
+.card-figs{display:flex;align-items:flex-start;gap:6px;margin-top:8px;position:relative;overflow:hidden}
+.card-figs .card-thumb{margin:0}
+.card-figs.solo .card-thumb{flex:0 0 auto}
+.card-figs.multi .card-thumb{flex:1 1 0;min-width:0;width:auto;object-fit:cover}
+.fig-more{position:absolute;right:6px;bottom:6px;font-size:10.5px;line-height:1;padding:3px 6px;
+  border-radius:5px;background:rgba(0,0,0,.55);color:#fff;pointer-events:none;letter-spacing:.02em}
+.card .meta{margin-top:7px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t4);flex-wrap:wrap}
+.card .meta .sep{color:var(--t5)}
+.pill{font-size:10.5px;padding:1px 6px;border-radius:4px;background:var(--pill-bg);color:var(--pill-tx)}
+/* 标签：按名字自动分配淡色，--th 由 core/tag-color.ts 算出来 */
+.pill.tag{
+  --th:40;
+  background:hsl(var(--th) 66% 92%);
+  color:hsl(var(--th) 42% 34%);
+}
+html[data-theme="dark"] .pill.tag{
+  background:hsl(var(--th) 30% 23%);
+  color:hsl(var(--th) 52% 74%);
+}
+.pill.todo{background:#fdf0e6;color:#a86a2a}
+.pill.todo.done{background:#e9f3e9;color:#4d7a4d}
+.pill.pin{background:var(--pin-bg);color:var(--pin-tx)}
+.pill.flag{background:var(--chip-bg);color:var(--t4);border:1px solid var(--border)}
+html[data-theme="dark"] .pill.todo{background:#3a2d1e;color:#d3a068}
+html[data-theme="dark"] .pill.todo.done{background:#23311f;color:#8fb183}
+mark{background:var(--hl-hit);color:inherit;border-radius:2px;padding:0 1px}
+.empty-list{padding:40px 18px;text-align:center;color:var(--t5);font-size:12.5px;line-height:1.8}
+
+/* ============================================================
+   拖拽排序：竖向拖卡片改顺序
+   插入位置用一条 2px 的色条标出来（放在盒子内部画，避免被 overflow:hidden 裁掉）
+   ============================================================ */
+.swipe.dragging-order{position:relative;z-index:12}
+.swipe.dragging-order .card{
+  box-shadow:0 10px 26px var(--shadow-lg);border-color:var(--border);
+  cursor:grabbing;user-select:none}
+.swipe.drop-before::before,.swipe.drop-after::after{
+  content:"";position:absolute;left:3px;right:3px;height:2px;border-radius:2px;
+  background:var(--accent);z-index:11;pointer-events:none}
+.swipe.drop-before::before{top:0}
+.swipe.drop-after::after{bottom:0}

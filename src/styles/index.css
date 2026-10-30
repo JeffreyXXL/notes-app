@@ -1,0 +1,13 @@
+/* 字体：全部本地打包，桌面端离线可用 */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/600.css';
+@import 'lxgw-wenkai-webfont/lxgwwenkai-regular.css';
+@import 'lxgw-wenkai-webfont/lxgwwenkai-bold.css';
+
+@import './tokens.css';
+@import './base.css';
+@import './left.css';
+@import './mid.css';
+@import './right.css';
+@import './sheet.css';
+@import './lock.css';

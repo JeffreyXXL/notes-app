@@ -1,0 +1,80 @@
+/* ============================================================
+   左栏：品牌 / tab / 目录树 / 归档废纸篓 / 设置入口
+   ============================================================ */
+.col-left{
+  background:var(--side-bg);border-right:1px solid var(--side-border);
+  display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
+  /* 「石墨」色系左栏是深色的。把通用 token 在这里整体重映射到 --side-*，
+     下面所有子规则就不用逐个改成 --side- 前缀了。 */
+  --t1:var(--side-t1);--t2:var(--side-t2);--t3:var(--side-t3);
+  --t4:var(--side-t4);--t5:var(--side-t5);
+  --hover:var(--side-hover);--hover-soft:var(--side-hover-soft);
+  --bg-elev:var(--side-elev);--chip-bg:var(--side-chip);
+  --border:var(--side-border);--border-soft:var(--side-border-soft);
+  --shadow:var(--side-shadow);
+  --accent:var(--side-accent);--accent-tx:var(--side-accent-tx);
+}
+.col-left>*{min-width:238px}
+.col-left>.tabs{min-width:214px}   /* 238 − 左右各 12 的 margin */
+.app.no-left .col-left{border-right-color:transparent}
+
+.brand{display:flex;align-items:center;gap:8px;padding:20px 18px 14px}
+.logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--accent-tx);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.brand span{font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--t1)}
+/* 名字可以自定义，太长就省略，别把右边的收起按钮挤跑 */
+#brand-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand .tgl{margin-left:auto}
+.tgl{width:24px;height:24px;flex:none;border:0;border-radius:6px;background:transparent;color:var(--t4);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.12s;font-family:inherit}
+.tgl:hover{background:var(--hover);color:var(--t2)}
+
+.tabs{display:flex;gap:2px;margin:0 12px 12px;background:var(--chip-bg);border-radius:8px;padding:2px}
+.tab{flex:1;font-size:12px;padding:5px 0;text-align:center;border-radius:6px;color:var(--t3);
+  cursor:pointer;user-select:none;transition:.14s}
+.tab:hover{color:var(--t2)}
+.tab.active{background:var(--bg-elev);color:var(--t1);font-weight:500;box-shadow:0 1px 2px var(--shadow)}
+
+.tree{flex:1;overflow-y:auto;min-height:0;padding:0 10px 28px}
+.row{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;color:var(--t2);
+  cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;transition:background .12s,color .12s}
+.row:hover{background:var(--hover)}
+.row.active{background:var(--bg-elev);color:var(--t1);font-weight:500;box-shadow:0 1px 2px var(--shadow)}
+.row .ic{flex:none;display:flex;color:var(--t4)}
+.row.active .ic{color:var(--t2)}
+/* 标签行：图标按标签名染成对应淡色，--th 来自 core/tag-color.ts，
+   --tag-l / --tag-al 由色系决定（深色侧边要用更亮的图标） */
+.row[data-tag] .ic{color:hsl(var(--th,40) 50% var(--tag-l))}
+.row[data-tag].active .ic{color:hsl(var(--th,40) 54% var(--tag-al))}
+.row .label{overflow:hidden;text-overflow:ellipsis}
+.row .cnt{margin-left:auto;font-size:11px;color:var(--t4);font-variant-numeric:tabular-nums;flex:none}
+.row.active .cnt{color:var(--t3)}
+/* 重命名：行尾的铅笔，hover 才出现，免得列表看着毛躁 */
+.row-edit{flex:none;display:none;align-items:center;justify-content:center;
+  width:17px;height:17px;margin-left:2px;border-radius:4px;color:var(--t4);
+  cursor:pointer;transition:background .12s,color .12s}
+.row:hover .row-edit{display:flex}
+.row-edit:hover{background:var(--hover);color:var(--t1)}
+.row-rename{flex:1;min-width:0;font-family:inherit;font-size:12.5px;line-height:1.4;
+  color:var(--t1);background:var(--bg-elev);border:1px solid var(--accent);
+  border-radius:4px;padding:1px 5px;outline:0}
+.chev{flex:none;width:12px;display:flex;align-items:center;justify-content:center;color:var(--t5);
+  transition:transform .15s}
+.chev.open{transform:rotate(90deg)}
+.sec-label{font-size:10.5px;color:var(--t4);letter-spacing:.06em;padding:14px 8px 6px;text-transform:uppercase}
+
+/* 拖拽排序：拖起来的那行浮起来，落点用一根细线标出来 */
+.row.dragging{position:relative;z-index:5;opacity:.92;background:var(--bg-elev);
+  box-shadow:0 4px 14px var(--shadow-lg);cursor:grabbing}
+.row.drop-before{box-shadow:inset 0 2px 0 -1px var(--accent)}
+.row.drop-after{box-shadow:inset 0 -2px 0 -1px var(--accent)}
+/* 拖拽过程中别选中文字，也别让光标变成文本插入符 */
+body.row-dragging{cursor:grabbing;user-select:none}
+body.row-dragging .row{cursor:grabbing}
+
+.side-sec{flex:none;padding:6px 10px 4px;border-top:1px solid var(--border-soft)}
+.side-foot{flex:none;padding:8px 10px 12px;border-top:1px solid var(--border)}
+.foot-btn{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:12.5px;
+  color:var(--t2);cursor:pointer;user-select:none;transition:background .12s,color .12s}
+.foot-btn:hover{background:var(--hover);color:var(--t1)}
+.foot-btn .ic{display:flex;color:var(--t4)}

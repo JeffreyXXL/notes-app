@@ -1,0 +1,391 @@
+/* ============================================================
+   设计 token
+   两个独立维度：
+     色系 html[data-scheme="paper|cream|graphite"]
+     明暗 html[data-theme="light|dark"]
+   组合起来 3 × 2 = 6 套。不带 data-scheme 时即「纸白」亮色。
+   顺序有讲究：亮色在前、暗色紧随其后，靠后 + 更高特异性压住上一套。
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0}
+html{color-scheme:light}
+html[data-theme="dark"]{color-scheme:dark}
+html,body{height:100%}
+
+:root{
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --doc-size:14.5px;
+  --doc-lh:1.9;
+
+  /* ============================================================
+     纸白 · 亮色（默认）—— 干净中性，接近纯白的阅读区
+     ============================================================ */
+  --bg-side:#f6f6f5;
+  --bg-mid:#fbfbfa;
+  --bg-main:#ffffff;
+  --bg-elev:#ffffff;
+  --border:#e9e9e7;
+  --border-soft:#f1f1ef;
+  --t1:#1b1b1a;
+  --t2:#4b4b47;
+  --t3:#83837c;
+  --t4:#aaaaa3;
+  --t5:#c4c4bd;
+  --hover:#ececea;
+  --hover-soft:#f5f5f3;
+  --sel-bg:#f2f2f5;
+  --sel-border:#e3e3ec;
+  --chip-bg:#efefed;
+  --pill-bg:#efefec;
+  --pill-tx:#78786f;
+  --pin-bg:#f5eddc;
+  --pin-tx:#8a6a34;
+  --accent:#34342f;
+  --accent-tx:#ffffff;
+  --code-bg:#f4f4f1;
+  --code-tx:#a83f4e;
+  --cb-bg:#f9f9f7;
+  --cb-border:#ebebe7;
+  --quote-line:#dadad2;
+  --quote-tx:#6b6b62;
+  --hl:#fdf0c4;
+  --hl-hit:#ffe89a;
+  --link:#4a52c4;
+  --link-line:#d6d8f2;
+  --shadow:rgba(0,0,0,.07);
+  --shadow-lg:rgba(0,0,0,.2);
+  --shadow-card:0 1px 3px rgba(0,0,0,.05);
+  --backdrop:rgba(28,28,26,.26);
+  --scroll:#dcdcd6;
+  --scroll-h:#c4c4bc;
+  --sel-cm:#dfe3fa;
+  --del:#c0554a;
+  /* 表格 */
+  --tb-line:#ececeb;
+  --tb-head:#f6f6f5;
+  /* 代码高亮：只跟明暗走，不跟色系走，六套配色下观感一致 */
+  --hl-kw:#8250b8;
+  --hl-str:#3f7d4e;
+  --hl-num:#a86a1c;
+  --hl-com:#9aa39b;
+  --hl-fn:#2f6fa8;
+  --hl-type:#b4553f;
+  --hl-punc:#9a9a93;
+
+  /* ============================================================
+     左栏专用 token
+     默认与全局一致；「石墨」色系会把左栏做成深色侧边，
+     那时只覆盖这一组，正文区完全不受影响。
+     ============================================================ */
+  --side-bg:var(--bg-side);
+  --side-t1:var(--t1);
+  --side-t2:var(--t2);
+  --side-t3:var(--t3);
+  --side-t4:var(--t4);
+  --side-t5:var(--t5);
+  --side-hover:var(--hover);
+  --side-hover-soft:var(--hover-soft);
+  --side-elev:var(--bg-elev);
+  --side-chip:var(--chip-bg);
+  --side-border:var(--border);
+  --side-border-soft:var(--border-soft);
+  --side-shadow:var(--shadow);
+  --side-accent:var(--accent);
+  --side-accent-tx:var(--accent-tx);
+
+  /* 标签图标在左栏的亮度（浅色侧边用暗色，深色侧边用亮色） */
+  --tag-l:53%;
+  --tag-al:43%;
+}
+
+/* ============================================================
+   纸白 · 暗色
+   ============================================================ */
+html[data-theme="dark"]{
+  --bg-side:#191918;
+  --bg-mid:#1f1f1e;
+  --bg-main:#171716;
+  --bg-elev:#262624;
+  --border:#2d2d2a;
+  --border-soft:#262624;
+  --t1:#e9e9e4;
+  --t2:#c3c3bc;
+  --t3:#9b9b94;
+  --t4:#7c7c74;
+  --t5:#5c5c56;
+  --hover:#2a2a28;
+  --hover-soft:#242423;
+  --sel-bg:#2b2b33;
+  --sel-border:#3a3a48;
+  --chip-bg:#252523;
+  --pill-bg:#2b2b28;
+  --pill-tx:#9b9b94;
+  --pin-bg:#382f20;
+  --pin-tx:#d9b47c;
+  --accent:#e9e9e4;
+  --accent-tx:#191918;
+  --code-bg:#2a2a27;
+  --code-tx:#e08d9c;
+  --cb-bg:#1d1d1c;
+  --cb-border:#2d2d2a;
+  --quote-line:#3a3a35;
+  --quote-tx:#a1a19a;
+  --hl:#4c401d;
+  --hl-hit:#5f4d20;
+  --link:#93a0f2;
+  --link-line:#3b4064;
+  --shadow:rgba(0,0,0,.5);
+  --shadow-lg:rgba(0,0,0,.65);
+  --shadow-card:0 1px 3px rgba(0,0,0,.3);
+  --backdrop:rgba(0,0,0,.55);
+  --scroll:#3a3a36;
+  --scroll-h:#4d4d46;
+  --sel-cm:#333b54;
+  --del:#e07a6c;
+  --tb-line:#2e2e2b;
+  --tb-head:#232322;
+  /* 代码高亮（暗色） */
+  --hl-kw:#c9a0f0;
+  --hl-str:#9ed49a;
+  --hl-num:#e0b76a;
+  --hl-com:#6f7a6f;
+  --hl-fn:#8fc2f0;
+  --hl-type:#f0a08a;
+  --hl-punc:#8a8a84;
+  --tag-l:62%;
+  --tag-al:70%;
+}
+
+/* ============================================================
+   奶油 · 亮色 —— 暖米底 + 鼠尾草绿，参照参考图的奶油卡片
+   ============================================================ */
+html[data-scheme="cream"]{
+  --bg-side:#f5efe3;
+  --bg-mid:#fbf6ec;
+  --bg-main:#fffcf6;
+  --bg-elev:#fffdf9;
+  --border:#e9e0cd;
+  --border-soft:#f2ecdd;
+  --t1:#2e2a22;
+  --t2:#574f3e;
+  --t3:#8a8270;
+  --t4:#aba391;
+  --t5:#c6bfae;
+  --hover:#efe7d6;
+  --hover-soft:#f7f1e3;
+  --sel-bg:#f9efdb;
+  --sel-border:#ecdcbc;
+  --chip-bg:#efe7d6;
+  --pill-bg:#efe7d6;
+  --pill-tx:#7d7460;
+  --pin-bg:#f7e8c6;
+  --pin-tx:#8a6a2f;
+  --accent:#6d8f6f;
+  --accent-tx:#ffffff;
+  --code-bg:#f2ead9;
+  --code-tx:#b0543f;
+  --cb-bg:#f8f2e5;
+  --cb-border:#ece2cf;
+  --quote-line:#dccfae;
+  --quote-tx:#6e6653;
+  --hl:#d9ecd2;
+  --hl-hit:#c3e2b8;
+  --link:#4c7f5f;
+  --link-line:#cfe3d3;
+  --shadow:rgba(92,72,32,.09);
+  --shadow-lg:rgba(60,46,20,.24);
+  --shadow-card:0 1px 3px rgba(92,72,32,.07);
+  --backdrop:rgba(46,42,34,.26);
+  --scroll:#ded5c2;
+  --scroll-h:#c9bea7;
+  --sel-cm:#dfe9d8;
+  --del:#c0554a;
+  --tb-line:#e8dfcb;
+  --tb-head:#f5f1e8;
+}
+
+/* ============================================================
+   奶油 · 暗色 —— 深咖啡底，暖而不刺眼
+   ============================================================ */
+html[data-scheme="cream"][data-theme="dark"]{
+  --bg-side:#1e1b16;
+  --bg-mid:#241f19;
+  --bg-main:#1b1712;
+  --bg-elev:#2b251d;
+  --border:#342e25;
+  --border-soft:#2b251d;
+  --t1:#ece5d8;
+  --t2:#c6bdaa;
+  --t3:#9d947f;
+  --t4:#7d7562;
+  --t5:#5d5647;
+  --hover:#2e2820;
+  --hover-soft:#272119;
+  --sel-bg:#33291c;
+  --sel-border:#4a3a24;
+  --chip-bg:#2a241c;
+  --pill-bg:#2f2920;
+  --pill-tx:#9d947f;
+  --pin-bg:#3b2f1c;
+  --pin-tx:#dcb87c;
+  --accent:#a8c4a0;
+  --accent-tx:#1b1712;
+  --code-bg:#2c261d;
+  --code-tx:#e0a08c;
+  --cb-bg:#221d16;
+  --cb-border:#342e25;
+  --quote-line:#453c2c;
+  --quote-tx:#a89e88;
+  --hl:#3d4a2c;
+  --hl-hit:#4b5c35;
+  --link:#a9d3b0;
+  --link-line:#3a4a37;
+  --shadow:rgba(0,0,0,.5);
+  --shadow-lg:rgba(0,0,0,.66);
+  --shadow-card:0 1px 3px rgba(0,0,0,.32);
+  --backdrop:rgba(0,0,0,.58);
+  --scroll:#3d362a;
+  --scroll-h:#514836;
+  --sel-cm:#3a4530;
+  --del:#e0836f;
+  --tb-line:#342d23;
+  --tb-head:#292319;
+  --tag-l:62%;
+  --tag-al:70%;
+}
+
+/* ============================================================
+   石墨 · 亮色 —— 深色侧边 + 近白正文 + 朱红点缀（参考图 3）
+   ============================================================ */
+html[data-scheme="graphite"]{
+  --bg-side:#262626;
+  --bg-mid:#fafaf9;
+  --bg-main:#ffffff;
+  --bg-elev:#ffffff;
+  --border:#e7e7e6;
+  --border-soft:#f0f0ef;
+  --t1:#1c1c1c;
+  --t2:#4a4a48;
+  --t3:#8b8b88;
+  --t4:#b0b0ac;
+  --t5:#cacac6;
+  --hover:#efefee;
+  --hover-soft:#f7f7f6;
+  --sel-bg:#f3f3f2;
+  --sel-border:#e6e6e4;
+  --chip-bg:#f0f0ef;
+  --pill-bg:#f0f0ef;
+  --pill-tx:#7c7c78;
+  --pin-bg:#fdf0df;
+  --pin-tx:#96632a;
+  --accent:#d94a4a;
+  --accent-tx:#ffffff;
+  --code-bg:#f6f5f4;
+  --code-tx:#d04a4a;
+  --cb-bg:#f8f8f7;
+  --cb-border:#ededec;
+  --quote-line:#dcdcda;
+  --quote-tx:#6c6c68;
+  --hl:#fff2ab;
+  --hl-hit:#ffe873;
+  --link:#d94a4a;
+  --link-line:#f4cccc;
+  --shadow:rgba(0,0,0,.08);
+  --shadow-lg:rgba(0,0,0,.22);
+  --shadow-card:0 1px 3px rgba(0,0,0,.06);
+  --backdrop:rgba(0,0,0,.3);
+  --scroll:#d9d9d7;
+  --scroll-h:#c2c2bf;
+  --sel-cm:#e4eaf7;
+  --del:#d94a4a;
+  --tb-line:#ececeb;
+  --tb-head:#f6f6f5;
+
+  /* 左栏整体反相：只有这一组变深 */
+  --side-bg:#262626;
+  --side-t1:#f2f2f0;
+  --side-t2:#c3c3bf;
+  --side-t3:#979792;
+  --side-t4:#7a7a75;
+  --side-t5:#5f5f5b;
+  --side-hover:#343433;
+  --side-hover-soft:#2d2d2d;
+  --side-elev:#3a3a38;
+  --side-chip:#303030;
+  --side-border:#353534;
+  --side-border-soft:#2e2e2d;
+  --side-shadow:rgba(0,0,0,.45);
+  --side-accent:#e06060;
+  --side-accent-tx:#ffffff;
+  --tag-l:66%;
+  --tag-al:76%;
+}
+
+/* ============================================================
+   石墨 · 暗色
+   ============================================================ */
+html[data-scheme="graphite"][data-theme="dark"]{
+  --bg-side:#1a1a1a;
+  --bg-mid:#1f1f1f;
+  --bg-main:#161616;
+  --bg-elev:#272727;
+  --border:#2d2d2d;
+  --border-soft:#252525;
+  --t1:#eaeae8;
+  --t2:#c2c2be;
+  --t3:#9a9a95;
+  --t4:#7b7b76;
+  --t5:#5d5d58;
+  --hover:#2a2a29;
+  --hover-soft:#232322;
+  --sel-bg:#2c2c2c;
+  --sel-border:#3c3c3a;
+  --chip-bg:#252524;
+  --pill-bg:#2b2b2a;
+  --pill-tx:#9a9a95;
+  --pin-bg:#382c1c;
+  --pin-tx:#d9b47c;
+  --accent:#d94a4a;
+  --accent-tx:#ffffff;
+  --code-bg:#2a2a29;
+  --code-tx:#ef8f8a;
+  --cb-bg:#1d1d1c;
+  --cb-border:#2d2d2c;
+  --quote-line:#3a3a38;
+  --quote-tx:#a0a09b;
+  --hl:#4a3a1c;
+  --hl-hit:#5c481f;
+  --link:#ef8f8a;
+  --link-line:#55393a;
+  --shadow:rgba(0,0,0,.55);
+  --shadow-lg:rgba(0,0,0,.68);
+  --shadow-card:0 1px 3px rgba(0,0,0,.35);
+  --backdrop:rgba(0,0,0,.6);
+  --scroll:#383837;
+  --scroll-h:#4c4c4a;
+  --sel-cm:#333a54;
+  --del:#ef8f8a;
+  --tb-line:#2f2f2e;
+  --tb-head:#232322;
+
+  --side-bg:#1a1a1a;
+  --side-t1:#eaeae8;
+  --side-t2:#c2c2be;
+  --side-t3:#9a9a95;
+  --side-t4:#7b7b76;
+  --side-t5:#5d5d58;
+  --side-hover:#2a2a29;
+  --side-hover-soft:#232323;
+  --side-elev:#2c2c2c;
+  --side-chip:#252524;
+  --side-border:#2d2d2d;
+  --side-border-soft:#252525;
+  --side-shadow:rgba(0,0,0,.5);
+  --side-accent:#d94a4a;
+  --side-accent-tx:#ffffff;
+  --tag-l:62%;
+  --tag-al:70%;
+}
+
+/* 字体：字体族只切换 --font-ui，正文 / UI 一起变 */
+html[data-font="wenkai"]{--font-ui:"LXGW WenKai","PingFang SC","Microsoft YaHei",serif}
+html[data-font="clean"]{--font-ui:"Inter","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif}

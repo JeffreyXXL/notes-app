@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>笔记</title>
+</head>
+<body>
+<div class="boot" id="boot">正在加载笔记…</div>
+<div class="app">
+  <aside class="col-left">
+    <div class="brand">
+      <div class="logo">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 2.5h8M2 6h8M2 9.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <span id="brand-name">笔记</span>
+      <button class="tgl" id="collapse-left" title="收起目录栏">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M9.7 3.4L5.1 8l4.6 4.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="tabs">
+      <div class="tab active" data-mode="folder">目录</div>
+      <div class="tab" data-mode="tag">标签</div>
+      <div class="tab" data-mode="group">分组</div>
+    </div>
+    <div class="tree" id="tree"></div>
+    <div class="side-sec" id="side-extra"></div>
+    <div class="side-foot">
+      <div class="foot-btn" id="open-settings">
+        <span class="ic"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.3" stroke="currentColor" stroke-width="1.2"/><path d="M8 1.7v1.5M8 12.8v1.5M14.3 8h-1.5M3.2 8H1.7M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+        <span>设置</span>
+      </div>
+    </div>
+  </aside>
+
+  <section class="col-mid">
+    <div class="mid-head">
+      <div class="mh-top">
+        <div class="tt">
+          <h2 id="mid-title">全部笔记</h2>
+          <div class="n" id="mid-count"></div>
+        </div>
+        <button class="tgl" id="collapse-mid" title="收起列表栏">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M9.7 3.4L5.1 8l4.6 4.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span id="mid-action"></span>
+      </div>
+      <div class="search" id="search-box">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.3"/><path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <input id="search" type="text" placeholder="搜索标题、正文、标签…" autocomplete="off" spellcheck="false">
+        <span class="clr" id="search-clear">&#10005;</span>
+      </div>
+    </div>
+    <div class="mid-list" id="mid-list"></div>
+  </section>
+
+  <section class="col-right" id="right"></section>
+
+  <div class="rail">
+    <button class="rail-btn" id="restore-left" title="展开目录栏">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2.2" y="3" width="11.6" height="10" rx="1.8" stroke="currentColor" stroke-width="1.2"/><path d="M6.4 3v10" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+    <button class="rail-btn" id="restore-mid" title="展开列表栏">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2.6 3.6h10.8M2.6 8h10.8M2.6 12.4h10.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- 无边框窗口的自绘按钮：只在桌面外壳里出现，浏览器里隐藏 -->
+  <div class="win-ctrls" id="win-ctrls">
+    <button class="win-btn" id="win-min" title="最小化">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.6 5h6.8" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
+    </button>
+    <button class="win-btn" id="win-max" title="最大化">
+      <svg class="ic-max" width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1.7" y="1.7" width="6.6" height="6.6" rx="1.3" stroke="currentColor" stroke-width="1.15"/></svg>
+      <svg class="ic-restore" width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1.4" y="3.1" width="5.5" height="5.5" rx="1.1" stroke="currentColor" stroke-width="1.15"/><path d="M3.3 3.1V2.2c0-.5.4-.9.9-.9h3.4c.5 0 .9.4.9.9v3.4c0 .5-.4.9-.9.9h-.9" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
+    </button>
+    <button class="win-btn close" id="win-close" title="关闭">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.3 2.3l5.4 5.4M7.7 2.3L2.3 7.7" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="backdrop" id="settings">
+  <div class="sheet wide">
+    <div class="sheet-head">
+      <h3>设置</h3>
+      <div class="x" id="close-settings">&#10005;</div>
+    </div>
+    <div class="sheet-body two">
+      <div class="sheet-col">
+      <div class="grp">
+        <div class="grp-t">外观</div>
+        <div class="rowset">
+          <span class="lb">名字</span>
+          <input class="txt" id="inp-appname" type="text" maxlength="12" placeholder="笔记" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="rowset">
+          <span class="lb">色系</span>
+          <div class="seg swatch" id="seg-scheme">
+            <span data-v="cream" class="on">奶油</span><span data-v="graphite">石墨</span><span data-v="paper">纸白</span>
+          </div>
+        </div>
+        <div class="rowset">
+          <span class="lb">明暗</span>
+          <div class="seg" id="seg-theme">
+            <span data-v="light" class="on">亮色</span><span data-v="dark">暗色</span><span data-v="auto">跟随系统</span>
+          </div>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">正文字体</div>
+        <div id="font-opts"></div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">排版</div>
+        <div class="rowset">
+          <span class="lb">字号</span>
+          <div class="seg" id="seg-size">
+            <span data-v="13.5">小</span><span data-v="14.5" class="on">标准</span><span data-v="16">大</span>
+          </div>
+        </div>
+        <div class="rowset">
+          <span class="lb">行距</span>
+          <div class="seg" id="seg-lh">
+            <span data-v="1.72">紧凑</span><span data-v="1.9" class="on">标准</span><span data-v="2.15">宽松</span>
+          </div>
+        </div>
+      </div>
+      </div>
+      <div class="sheet-col">
+      <div class="grp">
+        <div class="grp-t">编辑器</div>
+        <div class="rowset" style="padding-bottom:2px">
+          <span class="lb" style="width:auto">光标所在行显示 Markdown 源码</span>
+          <div class="switch on" id="sw-reveal"></div>
+        </div>
+        <div class="rowset" style="padding-bottom:2px">
+          <span class="lb" style="width:auto">标题改了，文件名跟着改</span>
+          <div class="switch on" id="sw-title"></div>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">交互</div>
+        <div class="rowset" style="padding-bottom:6px">
+          <span class="lb" style="width:auto">左滑手势</span>
+          <div class="switch on" id="sw-swipe"></div>
+        </div>
+        <div class="rowset wrap" style="padding-bottom:2px">
+          <span class="lb" style="width:auto">左滑显示的操作</span>
+          <div class="chips" id="swipe-opts">
+            <span data-a="pin" class="on">置顶</span>
+            <span data-a="archive" class="on">归档</span>
+            <span data-a="tag" class="on">整理</span>
+            <span data-a="hide" class="on">隐藏</span>
+            <span data-a="del" class="on">删除</span>
+          </div>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">安全</div>
+        <div class="rowset" style="padding-bottom:6px">
+          <span class="lb" style="width:auto">密码锁定</span>
+          <div class="switch" id="sw-lock"></div>
+        </div>
+        <div class="rowset" style="padding-bottom:6px">
+          <span class="lb" style="width:auto">当前密码</span>
+          <button class="btn sm" id="btn-setpw">设置密码</button>
+        </div>
+        <div class="rowset" style="padding-bottom:2px">
+          <span class="lb" style="width:auto">立即锁定</span>
+          <button class="btn sm" id="btn-locknow">锁定</button>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">系统</div>
+        <div class="rowset" style="padding-bottom:6px">
+          <span class="lb" style="width:auto">开机自启</span>
+          <div class="switch" id="sw-autostart"></div>
+        </div>
+        <div class="rowset" style="padding-bottom:2px">
+          <span class="lb" style="width:auto">点击关闭按钮</span>
+          <div class="seg" id="seg-close">
+            <span data-v="tray" class="on">最小化到托盘</span><span data-v="quit">退出程序</span>
+          </div>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="grp-t">数据</div>
+        <div class="kv">笔记库位置<span class="v" id="vault-path">—</span></div>
+        <div class="kv">索引<span class="v" id="idx-info">—</span></div>
+        <div style="padding:9px 2px 2px"><button class="btn" id="btn-reindex">重建索引</button></div>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="meta">
+  <div class="sheet form">
+    <div class="sheet-head">
+      <h3>整理</h3>
+      <div class="x" id="close-meta">&#10005;</div>
+    </div>
+    <div class="sheet-body" style="padding-top:14px">
+      <div class="field">
+        <label>所属目录</label>
+        <div class="combo-wrap">
+          <input id="meta-folder" type="text" placeholder="选择已有目录，或直接输入新目录" autocomplete="off" spellcheck="false">
+          <span class="caret">&#9660;</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>标签</label>
+        <div class="tag-editor" id="meta-tags-box">
+          <input id="meta-tags" type="text" placeholder="输入后回车，或点下方已有标签" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn" id="meta-cancel">取消</button>
+      <button class="btn primary" id="meta-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="actions">
+  <div class="sheet mini">
+    <div class="mini-acts" id="mini-acts"></div>
+    <div class="mini-cancel" id="mini-cancel">取消</div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
