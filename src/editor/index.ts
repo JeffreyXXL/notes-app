@@ -11,7 +11,7 @@ import {
   codeBlocksField, codeField, linkPlugin, setLinkHandler
 } from './live-preview';
 import type { LinkKind } from './live-preview';
-import { toggleWrap } from './commands';
+import { toggleWrap, continueMarkup } from './commands';
 import { insertImages, imageFilesFrom } from './image-insert';
 
 export type { EditorView } from '@codemirror/view';
@@ -98,6 +98,9 @@ export function mount(
           // 自定义的要排在 defaultKeymap 前面，不然会被默认键位抢先匹配
           { key: 'Mod-b', run: v => { toggleWrap(v, '**', '**', '粗体'); return true; } },
           { key: 'Mod-i', run: v => { toggleWrap(v, '*', '*', '斜体'); return true; } },
+          // 回车续格式：待办 / 列表 / 引用。不归它管时返回 false，
+          // 继续落到下面的 insertNewlineAndIndent
+          { key: 'Enter', run: continueMarkup },
           ...defaultKeymap,
           ...historyKeymap
         ]),

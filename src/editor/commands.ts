@@ -7,6 +7,8 @@
 
 // 注意是值导入不是 import type：insertImage 里要用 EditorView.scrollIntoView 这个静态方法
 import { EditorView } from '@codemirror/view';
+import type { EditorState } from '@codemirror/state';
+import { codeBlocksField } from './live-preview';
 
 /** 用 before/after 包住选区；再点一次取消。没有选区时插入一对标记并把光标放中间。 */
 export function toggleWrap(view: EditorView, before: string, after = before, hint = ''): void {
@@ -165,7 +167,6 @@ export function insertLink(view: EditorView): void {
 }
 
 export const TABLE_TEMPLATE = '| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |';
-
 /**
  * 插入一张图片。
  *
@@ -203,4 +204,99 @@ export function insertImage(
     });
   }
   view.focus();
+}
+
+/* ============================================================
+   回车续格式
+   ============================================================ */
+
+/** 一行开头的块级标记：`raw` 是这行已有的原文，`next` 是回车后新行该带的 */
+interface LineMarkup {
+  /** 匹配到的前缀原文（`- [x] ` 原样保留），用来判断「标记后面还有没有内容」 */
+  raw: string;
+  /** 新行要带的前缀 */
+  next: string;
+}
+
+/**
+ * 认出这行属于哪种块级结构。
+ *
+ * 顺序有讲究：待办 `- [ ] ` 必须先于无序列表 `- ` 匹配，
+ * 否则 `- [ ] x` 会被当成普通列表项，续下去就成了 `- ` 而不是 `- [ ] `。
+ */
+function markupOf(rest: string): LineMarkup | null {
+  // 待办：`- [ ] ` / `* [x] `。新行一律回到未勾选
+  let m = /^([-*+])\s+\[[ xX]\](?:\s+|$)/.exec(rest);
+  if (m) return { raw: m[0], next: `${m[1]} [ ] ` };
+
+  // 无序列表：`- ` `* ` `+ `
+  m = /^([-*+])(?:\s+|$)/.exec(rest);
+  if (m) return { raw: m[0], next: `${m[1]} ` };
+
+  // 有序列表：`1. ` `2) `。序号自动加一
+  m = /^(\d+)([.)])(?:\s+|$)/.exec(rest);
+  if (m) return { raw: m[0], next: `${Number(m[1]) + 1}${m[2]} ` };
+
+  // 引用：`> ` `> > `，套几层续几层
+  const q = /^(?:>[ \t]?)+/.exec(rest);
+  if (q) return { raw: q[0], next: q[0] };
+
+  return null;
+}
+
+/** 光标这一行在不在围栏代码块里（含围栏行本身） */
+function inCodeBlock(state: EditorState, lineNumber: number): boolean {
+  const blocks = state.field(codeBlocksField, false) ?? [];
+  return blocks.some(b => lineNumber >= b.s && lineNumber <= b.e);
+}
+
+/**
+ * 回车时把当前行的 Markdown 前缀带到下一行 —— 待办、无序/有序列表、引用。
+ *
+ * 只接管「光标在行尾、没有选区」的情况：在行中间回车还硬续前缀，
+ * 等于把半句话劈成两条，比不续更难受，那种情况交回 CodeMirror 默认行为。
+ *
+ * 空条目（只有前缀没内容）回车反而是**把前缀去掉** —— 这是退不出去的死角：
+ * 少了这一步，列表末尾想恢复正常段落就只能退格删字。
+ *
+ * 返回 false 表示「这次回车不归我管」，让 defaultKeymap 里的
+ * insertNewlineAndIndent 接着处理。
+ */
+export function continueMarkup(view: EditorView): boolean {
+  // 输入法正在组合时，回车是「确认候选词」而不是换行。
+  // CodeMirror 自己也会挡一道，但中文输入是主要用法，这里再明确拦一次
+  if (view.composing) return false;
+
+  const state = view.state;
+  const sel = state.selection.main;
+  if (sel.from !== sel.to) return false;
+
+  const line = state.doc.lineAt(sel.from);
+  if (sel.from !== line.to) return false;
+
+  // 代码块里回车就是换行。往代码里塞 `- ` 是灾难，而且会把语法高亮带歪
+  if (inCodeBlock(state, line.number)) return false;
+
+  const text = line.text;
+  // 缩进照抄，嵌套列表不会因为一次回车掉回外层
+  const indent = /^[ \t]*/.exec(text)![0];
+  const rest = text.slice(indent.length);
+  const mk = markupOf(rest);
+  if (!mk) return false;
+
+  // 这一条已经是空的：回车 = 结束列表，把整行清空，别再生成下一条
+  if (!rest.slice(mk.raw.length).trim()) {
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: '' },
+      selection: { anchor: line.from }
+    });
+    return true;
+  }
+
+  const insert = '\n' + indent + mk.next;
+  view.dispatch({
+    changes: { from: sel.from, insert },
+    selection: { anchor: sel.from + insert.length }
+  });
+  return true;
 }

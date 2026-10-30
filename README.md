@@ -172,6 +172,12 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - The `新建笔记` (New note) button at the top right of the middle pane — or `Ctrl/Cmd + N` — starts a note. The title is the first `# Heading` line of the body.
 - Typing `# `, `- `, `- [ ] `, `> `, `**bold**`, `` `code` `` immediately renders into the corresponding style.
 - When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
+- **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
+  Enter starts the next line with the same marker: ordered lists increment, new todos always start unchecked, indentation
+  is carried over. Press Enter again on an empty item and the marker is dropped, so you get a plain paragraph back
+  instead of a list you can't escape. Inside a fenced code block Enter is just a newline.
+- **A new note inherits where you are.** With a folder selected in the left pane, the note is created in that folder;
+  with a tag selected, it gets that tag. It never vanishes from the list you just clicked `新建笔记` in.
 - To turn this off: Settings → Editor → toggle it off.
 
 **Bottom quick bar**

@@ -360,12 +360,19 @@ export async function createNote(): Promise<Note | null> {
   const storage = store.storage;
   if (!storage) return null;
 
-  // 在「归档 / 废纸篓」里新建时先退出该视图
+  // 在「归档 / 废纸篓 / 已隐藏」里新建时先退出该视图
   if (store.state.filter && store.state.filter.type === 'view') store.state.filter = null;
 
-  const folder = store.state.filter && store.state.filter.type === 'folder'
-    ? store.state.filter.value
-    : DEFAULT_FOLDER;
+  /**
+   * 新笔记继承当前选中的目录 / 标签。
+   *
+   * 在「工作/产品」里点新建，笔记就落进那个目录；在某个标签下点新建，
+   * 笔记就带上那个标签 —— 否则建完立刻从当前列表里消失，看着像「新建失败」。
+   * 分组（本周重点 / 未完成待办）没有对应的归属关系，按默认目录走。
+   */
+  const f = store.state.filter;
+  const folder = f && f.type === 'folder' ? f.value : DEFAULT_FOLDER;
+  const tags = f && f.type === 'tag' ? [f.value] : [];
 
   const existing = new Set(store.notes.map(n => n.relPath.toLowerCase()));
   const relPath = uniquePath(existing, folder, '无标题');
@@ -380,7 +387,7 @@ export async function createNote(): Promise<Note | null> {
   const order = Number.isFinite(minOrder) ? minOrder - ORDER_STEP : ORDER_STEP;
 
   await storage.write(relPath, serializeFrontMatter(
-    { tags: [], pinned: false, archived: false, trashed: false, hidden: false, created: now, updated: now, order },
+    { tags, pinned: false, archived: false, trashed: false, hidden: false, created: now, updated: now, order },
     content
   ));
 
@@ -392,7 +399,7 @@ export async function createNote(): Promise<Note | null> {
     content,
     title: '无标题',
     mtime: now,
-    tags: [],
+    tags,
     pinned: false,
     archived: false,
     trashed: false,

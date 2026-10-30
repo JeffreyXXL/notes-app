@@ -1020,6 +1020,9 @@ function runSmoke() {
         let figsOk = false;
         // 第 35 轮：启动时把「无标题.md」这类占位符文件名对齐成正文标题
         let placeholderOk = false;
+        // 第 44 轮：新建笔记继承当前选中的目录/标签；回车把 Markdown 前缀带到下一行
+        let newNoteCtxOk = false;
+        let enterOk = false;
 
         // 设置面板：必须在「什么都没选中」的状态下用真鼠标点。
         // 这个状态下右栏是铺满整列的 .blank 占位元素。它一旦被标成
@@ -2478,6 +2481,132 @@ function runSmoke() {
           console.log('SMOKE lockFailed=' + err.message);
         }
 
+        // ⑩ 新建笔记继承当前目录/标签 + 回车续格式
+        //
+        // 两件事都只能在「真的新建出来、真的敲进去」之后才看得见，
+        // 所以断言全部落在磁盘上：多了哪个文件、front matter 里有没有标签、
+        // 正文有没有被续上前缀。
+        try {
+          await js("document.querySelector('.row[data-clear]').click()");
+          await wait(500);
+
+          const root = vaultRoot();
+          const before = new Set(vault.list(root).map(f => f.relPath));
+          const freshOnes = () => vault.list(root).map(f => f.relPath).filter(p => !before.has(p));
+          const readFile = rel => {
+            try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return ''; }
+          };
+
+          /**
+           * 点中左栏的某一行，直到它真的变成 active。
+           *
+           * 不能只点一下：左栏拖拽排序之后，紧接着的第一下点击会被 rowDragged
+           * 吞掉（那是为了防止「拖完手一松又触发一次点击」）。多试两次就行。
+           */
+          const pickRow = async sel => {
+            for (let i = 0; i < 3; i++) {
+              const got = await js(`(() => {
+                const r = document.querySelector(${JSON.stringify(sel)});
+                if (!r) return '';
+                if (!r.classList.contains('active')) r.click();
+                return r.dataset.path || '';
+              })()`);
+              await wait(500);
+              const on = await js(`(() => {
+                const r = document.querySelector(${JSON.stringify(sel)});
+                return !!r && r.classList.contains('active');
+              })()`);
+              if (got && on) return got;
+            }
+            return '';
+          };
+
+          // (a) 目录：在某个目录下点新建，文件要落进那个目录
+          const folder = await pickRow('.row[data-folder]');
+          await js("document.getElementById('btn-new').click()");
+          await wait(1100);
+
+          const folderFile = freshOnes()[0] || '';
+          const dirOfFile = folderFile ? folderFile.split('/').slice(0, -1).join('/') : '';
+
+          // (b) 标签：标签行只在「标签」这个 tab 下才渲染，先切过去
+          await js(`document.querySelector('.tab[data-mode="tag"]').click()`);
+          await wait(600);
+          const tag = await pickRow('.row[data-tag]');
+          await js("document.getElementById('btn-new').click()");
+          await wait(1100);
+
+          const editFile = freshOnes().filter(p => p !== folderFile)[0] || '';
+          // 正文只有 `# 无标题`，标签一旦出现就只可能来自 front matter
+          const tagRaw = editFile ? readFile(editFile) : '';
+
+          const folderOk = !!folder && dirOfFile === folder;
+          const tagCtxOk = !!tag && editFile !== '' && tagRaw.includes(tag);
+          newNoteCtxOk = folderOk && tagCtxOk;
+
+          console.log('SMOKE newNoteCtx=' + JSON.stringify({
+            folder, folderFile, dirOfFile, tag, editFile, folderOk, tagCtxOk,
+            probe: await js(`(() => ({
+              activeTab: (document.querySelector('.tab.active') || {dataset:{}}).dataset.mode || '',
+              tagRows: document.querySelectorAll('.row[data-tag]').length,
+              folderRows: document.querySelectorAll('.row[data-folder]').length
+            }))()`)
+          }));
+
+          // (c) 回车续格式：刚建好的这篇正开着、光标在文末，直接敲。
+          //
+          // 断言不能看 DOM：待办的 `- [ ] ` 一旦不在光标行，就会被换成复选框
+          // widget，textContent 只剩一个「＋」，根本看不出前缀有没有续上。
+          // 所以全部落到磁盘上的正文里 —— 那也是最终真正保存下来的东西。
+          const typeText = t => js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            if (!c) return 'nocontent';
+            c.focus();
+            try { return document.execCommand('insertText', false, ${JSON.stringify(t)}) ? 'ok' : 'fail'; }
+            catch { return 'fail'; }
+          })()`);
+          // 合成的 keydown 也要走 CodeMirror 挂在 contentDOM 上的 keymap；
+          // dispatchEvent 返回 false 说明 preventDefault 了 —— 也就是被我们接管了
+          const pressEnter = () => js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            if (!c) return 'nocontent';
+            const ev = new KeyboardEvent('keydown', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              bubbles: true, cancelable: true
+            });
+            return c.dispatchEvent(ev) ? 'passed' : 'prevented';
+          })()`);
+
+          const typed = await typeText('- [ ] 甲');
+          await wait(300);
+          const k1 = await pressEnter();     // → 新行 `- [ ] `
+          await wait(300);
+          const k2 = await pressEnter();     // 空条目回车 → 前缀消失
+          await wait(300);
+          await typeText('1. 乙');
+          await wait(300);
+          const k3 = await pressEnter();     // → 新行 `2. `
+          // 写盘防抖 450ms，多等一会儿再读
+          await wait(1500);
+
+          const body = editFile ? readFile(editFile) : '';
+          const want = '# 无标题\n\n- [ ] 甲\n1. 乙\n2. ';
+          const keysOk = [k1, k2, k3].every(k => k === 'prevented');
+
+          console.log('SMOKE enter=' + JSON.stringify({
+            typed, k1, k2, k3, keysOk, tail: body.slice(-48), ok: body.endsWith(want)
+          }));
+          enterOk = typed === 'ok' && keysOk && body.endsWith(want);
+
+          // 测试笔记别留在副本里（--demo 会重新播种，但真实库副本要干净）
+          for (const p of [folderFile, editFile]) {
+            if (!p) continue;
+            try { vault.remove(root, p); } catch { /* 清不掉就算了 */ }
+          }
+        } catch (err) {
+          console.log('SMOKE newNoteCtxFailed=' + err.message);
+        }
+
         // 收尾：把测试用的图和笔记清掉，别在用户库里留垃圾
         clearSmokeFixtures();
         const ok = cards > 0 && lines > 0 && bridge === 'object' && errs.length === 0
@@ -2485,12 +2614,13 @@ function runSmoke() {
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
-          && railOk;
+          && railOk && newNoteCtxOk && enterOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
-          hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk
+          hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
+          newNoteCtxOk, enterOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {
