@@ -152,6 +152,7 @@ A few assertions worth keeping:
 | `thumbUniform sameH=true h=[96] fitOk=true modes=multi:2,solo:1,multi:2,solo:1,multi:3,multi:2` | **All card thumbnails are the same height**; a single image uses `contain` (no crop), multiple images use `cover` and share the same width within a card |
 | `figs=[{"total":2,"shown":2,…,"gap":6},…,{"total":4,"shown":3,"more":"+1"}]` | Cards with two or more images really lay out side by side; at most 3 per row, 6px gaps, no overflow; the 4th onward collapse into `+N` |
 | `lock={"enabled":true,"shown":true,"stillLocked":true,"errText":"密码不对","unlocked":true}` | Enabling the password flips the toggle; "lock now" really covers the UI; a wrong password is rejected with a message; the right one gets through |
+| `railRegion=no-drag coveredBy=""` | The rail buttons shown after collapsing a pane are carved out of the window drag region — otherwise a real click drags the window instead of hitting the button |
 
 The final `verdict={...}` line prints all of those booleans — if one goes red, the name tells you which.
 
@@ -631,6 +632,11 @@ Rule: only put `drag` on a narrow top strip, never on an element that fills a la
 
 Related: `webContents.sendInputEvent()` injects at the renderer's input layer and **bypasses window-level hit testing**, so clicking
 buttons with it in a smoke test cannot catch this class of bug. The only way is asserting `getComputedStyle(el).webkitAppRegion`.
+
+The same trap caught us a second time, in a subtler shape: the rail buttons that appear after collapsing a pane (`.rail`,
+8–70 × 9–37) sat inside `.brand`'s drag rect (0–238 × 0–58) — and `.brand` still reports that rect even when the left pane is 0px wide,
+because its contents overflow the collapsed column. Both rail buttons were completely unclickable with a real mouse, while injected
+CDP clicks worked perfectly and proved nothing. Fix: `-webkit-app-region: no-drag` on `.rail`, which carves it out of the drag region.
 
 **② Vite's `emptyOutDir` does one `rmSync` of the whole directory**
 

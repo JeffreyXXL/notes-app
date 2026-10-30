@@ -14,7 +14,12 @@ body{
 
 /* 折叠后浮出的恢复按钮 */
 .rail{position:absolute;top:9px;left:calc(var(--left-w) + var(--mid-w) + 8px);z-index:60;
-  display:flex;gap:6px;transition:left .24s cubic-bezier(.4,0,.2,1)}
+  display:flex;gap:6px;transition:left .24s cubic-bezier(.4,0,.2,1);
+  /* 这一行是必须的：左栏折叠后 .brand（0-238 × 0-58）和中栏的 .mh-top 仍然挂着
+     -webkit-app-region:drag，它们的矩形还留在左上角，而拖动区是「窗口级命中区域」，
+     不认 z-index —— rail 就算 z-index 60 浮在上面，真实鼠标也点不进去。
+     no-drag 会把 rail 这块从拖动区里挖出来，按钮才收得到点击。 */
+  -webkit-app-region:no-drag}
 .rail-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg-elev);
   color:var(--t3);cursor:pointer;display:none;align-items:center;justify-content:center;
   box-shadow:0 1px 3px var(--shadow);transition:.12s;font-family:inherit}

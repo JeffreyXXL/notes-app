@@ -1015,6 +1015,7 @@ function runSmoke() {
         let hideOk = false;
         let lockOk = false;
         let appNameOk = false;
+        let railOk = false;
         let thumbRowOk = false;
         let figsOk = false;
         // 第 35 轮：启动时把「无标题.md」这类占位符文件名对齐成正文标题
@@ -2270,6 +2271,27 @@ function runSmoke() {
           console.log('SMOKE appName brand=' + JSON.stringify(brand) + ' docTitle=' + JSON.stringify(docTitle));
           appNameOk = brand === '我的笔记' && docTitle === '我的笔记';
 
+          // 折叠后浮出的 rail 按钮必须从窗口拖动区里挖出来（no-drag）。
+          // 折叠状态下 .brand（0-238 × 0-58）和 .mh-top 的矩形还在，它们挂着
+          // -webkit-app-region:drag；而拖动区是「窗口级命中区域」，不认 z-index，
+          // rail 少了 no-drag 的话真实鼠标根本点不进去 —— 更坑的是 CDP 注入的
+          // 鼠标事件会绕过命中测试，所以只有断言 computed style 才测得出来。
+          const railRegion = await js("getComputedStyle(document.querySelector('.rail')).webkitAppRegion");
+          const railCover = await js(`(() => {
+            const rail = document.querySelector('.rail');
+            const r = rail.getBoundingClientRect();
+            return [...document.querySelectorAll('*')]
+              .filter(el => {
+                if (rail.contains(el)) return false;
+                if (getComputedStyle(el).webkitAppRegion !== 'drag') return false;
+                const b = el.getBoundingClientRect();
+                return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top;
+              })
+              .map(el => el.className || el.tagName).join(',');
+          })()`);
+          console.log('SMOKE railRegion=' + railRegion + ' coveredBy=' + JSON.stringify(railCover));
+          railOk = railRegion === 'no-drag';
+
           // 改回默认，后面截图别带着测试名字
           await js(`(() => {
             const i = document.getElementById('inp-appname');
@@ -2462,12 +2484,13 @@ function runSmoke() {
           && blankOk && imgOk && imgPickOk && imgBoxOk && imgResizeOk && imgEditOk && imgPasteOk
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
-          && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk;
+          && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
+          && railOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
-          hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk
+          hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {

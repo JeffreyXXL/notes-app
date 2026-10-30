@@ -151,6 +151,7 @@ npm run desktop:shots  # 同上，但笔记库换成虚构的演示数据，专�
 | `thumbUniform sameH=true h=[96] fitOk=true modes=multi:2,solo:1,multi:2,solo:1,multi:3,multi:2` | **所有卡片缩略图高度一致**；单图 `contain` 不裁，多图 `cover` 且同一张卡片里宽度一致 |
 | `figs=[{"total":2,"shown":2,…,"gap":6},…,{"total":4,"shown":3,"more":"+1"}]` | 两张以上的卡片都真的并排显示了；一排最多露 3 张、间距 6px、不溢出卡片，第 4 张起收进 `+N` |
 | `lock={"enabled":true,"shown":true,"stillLocked":true,"errText":"密码不对","unlocked":true}` | 设完密码开关变开；「立即锁定」真的盖上；错密码被挡住并提示；对密码放行 |
+| `railRegion=no-drag coveredBy=""` | 折叠后浮出的恢复按钮已经从窗口拖动区里挖出来了 —— 否则真实鼠标点它只会拖窗口，点不到按钮 |
 
 最后一行 `verdict={...}` 把上面这些布尔值全打出来，哪一项红了直接看名字。
 
@@ -623,6 +624,12 @@ CREATE VIRTUAL TABLE notes_fts USING fts5(
 
 顺带一提：`webContents.sendInputEvent()` 是在渲染进程输入层注入的，**绕过了窗口级命中测试**，
 所以用它在冒烟测试里点按钮，测不出这类 bug。这种问题只能靠断言 `getComputedStyle(el).webkitAppRegion`。
+
+同一个坑后来又以更隐蔽的方式踩了一次：折叠侧栏之后浮出来的那两个恢复按钮（`.rail`，8–70 × 9–37）
+正好落在 `.brand` 的拖动矩形（0–238 × 0–58）里 —— 而左栏宽度变成 0 之后，`.brand` 的矩形**还在**
+（里面的内容溢出了折叠后的列）。结果就是真实鼠标点这两个按钮完全没反应，窗口被拖着走；
+而用 CDP 注入的点击一切正常，什么也证明不了。修法是给 `.rail` 加 `-webkit-app-region: no-drag`，
+把这两个按钮从拖动区里挖出来。
 
 **② vite 的 `emptyOutDir` 会一次性 `rmSync` 整个目录**
 
