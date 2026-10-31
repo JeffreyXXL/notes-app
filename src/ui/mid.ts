@@ -420,6 +420,12 @@ export function renderMid(): void {
   const box = document.getElementById('mid-list');
   if (!box) return;
 
+  // 列表还是那一批（reload 之后每次都会整列重绘）：把滚动位置带过去。
+  // 换了目录 / 标签 / 搜索词就回到顶部，那才是用户预期的位置。
+  const sig = list.map(n => n.id).join('|');
+  const keep = box.dataset.sig === sig ? box.scrollTop : 0;
+  box.dataset.sig = sig;
+
   if (!list.length) {
     let msg = '这里还没有笔记';
     if (q) msg = '没有找到匹配的笔记';
@@ -434,4 +440,5 @@ export function renderMid(): void {
 
   box.innerHTML = list.map(n => cardHTML(n, q)).join('');
   bindCards(box);
+  if (keep) box.scrollTop = keep;
 }

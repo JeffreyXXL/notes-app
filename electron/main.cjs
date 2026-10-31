@@ -1013,6 +1013,12 @@ function runSmoke() {
         const errs = logs.filter(l => l.includes('Error') || l.includes('失败'));
         // 未选中笔记时右栏占位元素不能是窗口拖动区，否则会吃掉弹层的点击
         let blankOk = true;
+        // 但顶部那条窄的必须能拖：不选笔记时它是右栏唯一的拖动把手
+        let dragBarOk = false;
+        // 浮窗按钮的光标位置 / 选区，以及切后台回来后的滚动位置
+        let qbCaretOk = false;
+        let qbSelOk = false;
+        let keepScrollOk = false;
         // 图片：渲染出来的尺寸对不对 / 单击只选中 / 双击退回源码 / 改宽度 / 粘贴能不能落盘
         let imgOk = false;
         let imgPickOk = false;
@@ -1065,6 +1071,18 @@ function runSmoke() {
           console.log('SMOKE blank=' + blank);
           // 这条是硬性要求：铺满整列的占位元素绝不能是窗口拖动区
           blankOk = !/drag=drag/.test(String(blank));
+
+          // 顶上那条和正文头等高的空条反过来必须是 drag，
+          // 不然第一次打开应用（什么都没选）窗口就没地方按着拖了
+          const dragBar = await js(`(()=>{
+            const b = document.querySelector('.doc-head-blank');
+            if (!b) return 'absent';
+            const r = b.getBoundingClientRect();
+            return Math.round(r.width) + 'x' + Math.round(r.height) +
+              ' drag=' + getComputedStyle(b).webkitAppRegion;
+          })()`);
+          console.log('SMOKE dragBar=' + dragBar);
+          dragBarOk = /drag=drag/.test(String(dragBar)) && /^[1-9]\d*x47\b/.test(String(dragBar));
 
           await js("document.getElementById('open-settings').click()");
           await wait(450);
@@ -1306,8 +1324,128 @@ function runSmoke() {
           console.log('SMOKE tableEditFailed=' + err.message);
         }
 
+        // 浮窗按钮：用真实鼠标点，光标不能跑到行尾，选中文字要作用在选中的内容上
+        try {
+          // 冒烟窗口拿不到系统焦点，document.hasFocus() 恒为 false，view.hasFocus
+          // 也跟着是 false —— 和真实使用差了一整条路径。用 CDP 的焦点模拟补上
+          try {
+            win.webContents.debugger.attach('1.3');
+            await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+          } catch { /* 已经 attach 过 */ }
+
+          const clickBox = async (expr, count = 1) => {
+            const raw = await js(expr);
+            if (!raw) return false;
+            const r = JSON.parse(raw);
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: r.x, y: r.y, button: 'left', clickCount: count });
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: r.x, y: r.y, button: 'left', clickCount: count });
+            return true;
+          };
+          const qbPt = id => `(()=>{const b=document.querySelector('[data-qb="${id}"]');if(!b)return '';
+            const r=b.getBoundingClientRect();
+            return JSON.stringify({x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)})})()`;
+          // 挑一行够长的，落在它靠左的位置，光标一定不在行尾
+          const linePt = `(()=>{
+            const lines = [...document.querySelectorAll('#editor-host .cm-line')];
+            for (const l of lines) {
+              if (l.textContent.trim().length > 14) {
+                const r = l.getBoundingClientRect();
+                return JSON.stringify({ x: Math.round(r.left + 14), y: Math.round(r.top + r.height / 2) });
+              }
+            }
+            return '';
+          })()`;
+          // 光标停在这一行的第几个字。用 Range 量，被 decoration 藏掉的标记不算
+          const caretAt = `(()=>{
+            const s = getSelection();
+            if (!s.anchorNode) return -1;
+            const el = s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode;
+            const line = el.closest('.cm-line');
+            if (!line) return -1;
+            const r = document.createRange();
+            r.setStart(line, 0);
+            r.setEnd(s.anchorNode, s.anchorOffset);
+            return r.toString().length;
+          })()`;
+          const undo = async () => {
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
+            await wait(450);
+          };
+
+          await js("document.querySelector('#editor-host .cm-content').focus()");
+          await wait(200);
+
+          // ① 光标停在行中间，点粗体：插入点还在光标处，不能跳到行尾
+          await clickBox(linePt);
+          await wait(300);
+          const off0 = Number(await js(caretAt));
+          await clickBox(qbPt('bold'));
+          await wait(450);
+          const off1 = Number(await js(caretAt));
+          const picked = await js("getSelection().toString()");
+          // 插入的 **粗体** 占位词被选中；跑到行尾的话 off1 会是一个很大的数
+          qbCaretOk = picked === '粗体' && Math.abs(off1 - off0) <= 2;
+          console.log('SMOKE qbCaret=' + (qbCaretOk ? 'ok' : 'bad') +
+            ' off=' + off0 + '->' + off1 + ' picked=' + picked);
+          await undo();
+
+          // ② 双击选中一个词再点粗体：应该包住这个词，而不是在光标处插占位词
+          await clickBox(linePt);
+          await wait(200);
+          await clickBox(linePt, 2);
+          await wait(350);
+          const word = String(await js("getSelection().toString()")).trim();
+          await clickBox(qbPt('bold'));
+          await wait(450);
+          // 别去翻「第一个 .cm-strong」—— 正文里本来就有加粗的字。
+          // 直接看选区里的字现在是不是被 cm-strong 包住了
+          const wrapped = await js(`(()=>{
+            const s = getSelection();
+            if (!s.anchorNode) return false;
+            const el = s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode;
+            return !!el.closest('.cm-strong');
+          })()`);
+          const stillPicked = String(await js("getSelection().toString()")).trim();
+          // 光标就停在这一行，而「光标所在行显示源码」是默认开着的 ——
+          // 这行不会渲染成 cm-strong，而是直接露出 `**词**`，两种都算成功
+          const lineText = String(await js(`(()=>{
+            const s = getSelection();
+            if (!s.anchorNode) return '';
+            const el = s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode;
+            const line = el.closest('.cm-line');
+            return line ? line.textContent : '';
+          })()`));
+          qbSelOk = !!word && stillPicked === word
+            && (wrapped === true || lineText.includes('**' + word + '**'));
+          console.log('SMOKE qbSel=' + (qbSelOk ? 'ok' : 'bad') +
+            ' word=' + word + ' wrapped=' + wrapped + ' line=' + lineText.slice(0, 40));
+          await undo();
+
+          // ③ 切到后台再回来：正文不能跳回文章开头
+          await js("document.querySelector('#editor-host .cm-scroller').scrollTop = 260");
+          await wait(300);
+          const top0 = Number(await js("document.querySelector('#editor-host .cm-scroller').scrollTop"));
+          win.hide();
+          await wait(700);
+          win.show();
+          await wait(1600);
+          const top1 = Number(await js("document.querySelector('#editor-host .cm-scroller').scrollTop"));
+          keepScrollOk = top0 > 100 && Math.abs(top1 - top0) < 4;
+          console.log('SMOKE keepScroll=' + (keepScrollOk ? 'ok' : 'bad') + ' ' + top0 + '->' + top1);
+        } catch (err) {
+          console.log('SMOKE qbCaretFailed=' + err.message);
+        }
+
         // 快捷栏：点一下粗体，确认真的改到了正文
         try {
+          // 上一步可能留下了选区，先折叠掉 —— 有选区时点粗体是「包住选中的字」，
+          // 不会插入「粗体」这个占位词，下面那条断言就会假失败
+          await js("document.querySelector('#editor-host .cm-content').focus()");
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
+          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
+          await wait(250);
+
           const hasBtn = await js("!!document.querySelector('[data-qb=\"bold\"]')");
           if (!hasBtn) {
             console.log('SMOKE quickbar=missing');
@@ -2744,7 +2882,8 @@ function runSmoke() {
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
-          && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk;
+          && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
+          && dragBarOk && qbCaretOk && qbSelOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,

@@ -12,8 +12,20 @@ import { codeBlocksField } from './live-preview';
 import { store, noteById, resolveLink } from '../store';
 import { dirOf } from '../core/path';
 
+/**
+ * 改文档之前先把焦点还给正文。
+ *
+ * view.focus() 自己会做一次选区同步（focusPreventScroll + updateSelection）。
+ * 放在 dispatch 后面调用，就等于把刚设好的光标位置又盖一遍 ——
+ * 点浮窗按钮时光标莫名跑到行尾就是这么来的。所以统一改成「先聚焦，再改」。
+ */
+function ensureFocus(view: EditorView): void {
+  if (!view.hasFocus) view.focus();
+}
+
 /** 用 before/after 包住选区；再点一次取消。没有选区时插入一对标记并把光标放中间。 */
 export function toggleWrap(view: EditorView, before: string, after = before, hint = ''): void {
+  ensureFocus(view);
   const { from, to } = view.state.selection.main;
   const doc = view.state.doc;
 
@@ -24,7 +36,6 @@ export function toggleWrap(view: EditorView, before: string, after = before, hin
       changes: { from, insert },
       selection: { anchor: from + before.length, head: from + before.length + hint.length }
     });
-    view.focus();
     return;
   }
 
@@ -58,11 +69,11 @@ export function toggleWrap(view: EditorView, before: string, after = before, hin
       selection: { anchor: from + before.length, head: to + before.length }
     });
   }
-  view.focus();
 }
 
 /** 给选中的每一行加前缀；如果全都已经有了，就全部去掉。 */
 export function toggleLinePrefix(view: EditorView, prefix: string): void {
+  ensureFocus(view);
   const sel = view.state.selection.main;
   const doc = view.state.doc;
   const first = doc.lineAt(sel.from).number;
@@ -79,11 +90,11 @@ export function toggleLinePrefix(view: EditorView, prefix: string): void {
   }
 
   if (changes.length) view.dispatch({ changes });
-  view.focus();
 }
 
 /** 标题级别循环：无 → ## → ### → 无 */
 export function cycleHeading(view: EditorView): void {
+  ensureFocus(view);
   const sel = view.state.selection.main;
   const doc = view.state.doc;
   const line = doc.lineAt(sel.from);
@@ -99,11 +110,11 @@ export function cycleHeading(view: EditorView): void {
     changes: { from: line.from, to: line.from + (m ? m[0].length : 0), insert: next },
     selection: { anchor: line.from + next.length }
   });
-  view.focus();
 }
 
 /** 在当前行后面插一段独立块（表格 / 分隔线），自动和上下文隔开空行。 */
 export function insertBlock(view: EditorView, block: string): void {
+  ensureFocus(view);
   const sel = view.state.selection.main;
   const doc = view.state.doc;
   const line = doc.lineAt(sel.to);
@@ -117,7 +128,6 @@ export function insertBlock(view: EditorView, block: string): void {
     changes: { from: line.to, insert: text },
     selection: { anchor: line.to + text.length }
   });
-  view.focus();
 }
 
 /** 插入链接：有选中文字就拿它当链接文字，光标自动落在 url 上 */
@@ -145,6 +155,7 @@ function linkText(relDir: string, name: string): string {
  * 不同目录下重名是常态，只写标题点下去会跳到别人的笔记里。
  */
 export function insertWikiLink(view: EditorView): void {
+  ensureFocus(view);
   const sel = view.state.selection.main;
   const doc = view.state.doc;
   const dir = currentDir();
@@ -176,6 +187,7 @@ export function insertWikiLink(view: EditorView): void {
 }
 
 export function insertLink(view: EditorView): void {
+  ensureFocus(view);
   const sel = view.state.selection.main;
   const doc = view.state.doc;
 
@@ -194,7 +206,6 @@ export function insertLink(view: EditorView): void {
       selection: { anchor: urlStart, head: urlStart + 3 }
     });
   }
-  view.focus();
 }
 
 export const TABLE_TEMPLATE = '| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |';
@@ -212,6 +223,7 @@ export function insertImage(
   alt = '',
   at?: number
 ): void {
+  ensureFocus(view);
   const doc = view.state.doc;
   const pos = Math.max(0, Math.min(at ?? view.state.selection.main.to, doc.length));
   const line = doc.lineAt(pos);
@@ -234,7 +246,6 @@ export function insertImage(
       effects: EditorView.scrollIntoView(line.to, { y: 'center' })
     });
   }
-  view.focus();
 }
 
 /* ============================================================

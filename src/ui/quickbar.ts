@@ -128,13 +128,34 @@ export function bindQuickbar(view: EditorView): void {
   const bar = document.getElementById('quickbar');
   if (!bar) return;
 
-  // 按下就阻止默认：否则编辑器失焦，光标行会闪一下变回渲染态
-  bar.addEventListener('mousedown', e => e.preventDefault());
+  /**
+   * 按下按钮那一刻的选区。
+   *
+   * mousedown 里 preventDefault 是为了不让编辑器失焦（否则光标行会闪一下
+   * 变回渲染态）。但光靠它挡不住所有情况：正文的选区有时候会在这中间被
+   * 折叠掉，等 click 再读 view.state.selection 就只剩一个光标了 ——
+   * 于是「选中一段字点粗体」变成在光标处插一对空标记，看起来就像光标
+   * 自己跑到了别处。所以按下的瞬间先存一份，命令执行前补回去。
+   */
+  let saved: { anchor: number; head: number } | null = null;
+
+  bar.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const s = view.state.selection.main;
+    saved = { anchor: s.anchor, head: s.head };
+  });
 
   bar.addEventListener('click', e => {
     const btn = (e.target as HTMLElement).closest('[data-qb]') as HTMLElement | null;
     if (!btn) return;
     const cmd = CMDS.find(c => c && c.id === btn.dataset.qb);
-    cmd?.run(view);
+    if (!cmd) return;
+
+    const s = view.state.selection.main;
+    if (saved && (s.anchor !== saved.anchor || s.head !== saved.head)) {
+      view.dispatch({ selection: saved });
+    }
+    saved = null;
+    cmd.run(view);
   });
 }

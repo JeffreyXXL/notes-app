@@ -15,6 +15,10 @@
 .doc-head .hint.hit{color:var(--pin-tx);background:var(--pin-bg);padding:2px 7px;border-radius:5px;font-size:10.5px}
 .doc-body{flex:1;overflow:hidden;min-height:0}
 #editor-host{height:100%}
+/* 没选中笔记时，顶部这条空条只干一件事：当窗口拖动把手。
+   以前这里是整块铺满的 .blank，拖动区会被算成「整列」，把盖在右栏上的
+   弹层一起吃掉；现在只留和正文头等高的窄条，和选中笔记时完全一致 */
+.doc-head-blank{pointer-events:auto}
 .blank{flex:1;background:var(--bg-main)}
 
 #editor-host .cm-editor{height:100%;font-size:var(--doc-size);background:var(--bg-main);color:var(--t2)}

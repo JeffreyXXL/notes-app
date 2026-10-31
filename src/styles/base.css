@@ -82,6 +82,13 @@ html[data-shell="desktop"] .doc-head .pill{-webkit-app-region:no-drag}
 /* 弹层永远可点：backdrop 铺满全屏，no-drag 会把底下所有拖动区整体挖掉 */
 html[data-shell="desktop"] .backdrop{-webkit-app-region:no-drag}
 
+/* 弹层打开时，顶上那几条也不再当拖动把手。
+   窗口级命中区域不认 z-index，drag 条会把盖在上面的弹层一起吃掉 ——
+   设置面板右上角的关闭按钮正好落在 .doc-head 的矩形里，不取消就点不动。 */
+html[data-shell="desktop"]:has(.backdrop.open) .brand,
+html[data-shell="desktop"]:has(.backdrop.open) .mh-top,
+html[data-shell="desktop"]:has(.backdrop.open) .doc-head{-webkit-app-region:no-drag}
+
 /* 右上角让出窗口按钮的位置，免得标签被压住 */
 html[data-shell="desktop"]:not([data-os="mac"]) .col-right .doc-head{padding-right:112px}
 /* macOS 的 hiddenInset 会在左上角留红绿灯 */
