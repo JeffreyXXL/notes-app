@@ -1667,10 +1667,22 @@ function runSmoke() {
           })()`);
           await wait(450);
           try {
-            const p = path.join(__dirname, '..', 'docs', 'left-rename.png');
-            fs.mkdirSync(path.dirname(p), { recursive: true });
-            fs.writeFileSync(p, (await win.webContents.capturePage()).toPNG());
-            console.log('SMOKE renameShot=' + p);
+            // 和 saveShot 一样要试两个位置：打包成 asar 之后 __dirname 在 asar 里，
+            // 往里写会报 ENOTDIR，退到临时目录
+            const png = (await win.webContents.capturePage()).toPNG();
+            let saved = 'none';
+            for (const target of [
+              path.join(__dirname, '..', 'docs', 'left-rename.png'),
+              path.join(app.getPath('temp'), 'notes-app', 'left-rename.png')
+            ]) {
+              try {
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.writeFileSync(target, png);
+                saved = target;
+                break;
+              } catch { /* 换下一个位置 */ }
+            }
+            console.log('SMOKE renameShot=' + saved);
           } catch (e) {
             console.log('SMOKE renameShotFailed=' + e.message);
           }
