@@ -1,4 +1,4 @@
-import type { Settings, FontId } from './types';
+import type { Settings, FontId, HlColor } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   font: 'sys',
@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
   midCollapsed: false,
   titleRename: true,
   linkPath: true,
+  hlColor: 'yellow',
   folderOrder: [],
   tagOrder: [],
   appName: '笔记',
@@ -46,6 +47,15 @@ export const FONTS: FontDef[] = [
   }
 ];
 
+export const HL_COLORS: { id: HlColor; name: string }[] = [
+  { id: 'yellow', name: '黄' },
+  { id: 'green', name: '绿' },
+  { id: 'blue', name: '蓝' },
+  { id: 'pink', name: '粉' },
+  { id: 'purple', name: '紫' },
+  { id: 'orange', name: '橙' }
+];
+
 /** 老版本设置文件可能缺字段，合并兜底 */
 export function mergeSettings(raw: unknown): Settings {
   const s = (raw || {}) as Partial<Settings>;
@@ -59,6 +69,8 @@ export function mergeSettings(raw: unknown): Settings {
     // 名字清空等于没设，别让左上角变成一片空白
     appName: name || DEFAULT_SETTINGS.appName,
     lockEnabled: !!s.lockEnabled,
-    lockHash: typeof s.lockHash === 'string' ? s.lockHash : ''
+    lockHash: typeof s.lockHash === 'string' ? s.lockHash : '',
+    // 设置文件被手改过、或者是从更新版本降级回来的，认不出的颜色退回默认
+    hlColor: HL_COLORS.some(c => c.id === s.hlColor) ? s.hlColor! : DEFAULT_SETTINGS.hlColor
   };
 }

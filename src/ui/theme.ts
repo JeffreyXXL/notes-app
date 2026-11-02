@@ -16,6 +16,10 @@ export function applySettings(): void {
   // 色系与明暗是两个独立维度，组合出 6 套
   root.setAttribute('data-scheme', s.scheme || 'paper');
 
+  // 高亮色是第三个独立维度：只覆盖 --mark 一个变量，
+  // 六套色系 × 明暗都能用同一支马克笔（见 tokens.css 末尾那段）
+  root.setAttribute('data-hl', s.hlColor || 'yellow');
+
   const dark = s.theme === 'dark' || (s.theme === 'auto' && mqDark.matches);
   root.setAttribute('data-theme', dark ? 'dark' : 'light');
 

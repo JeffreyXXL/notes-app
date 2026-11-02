@@ -1047,6 +1047,9 @@ function runSmoke() {
         let enterOk = false;
         // 第 45 轮：`==高亮==`
         let hlOk = false;
+        // 第 50 轮：高亮可选颜色（设置面板 + 快捷栏右键色板）
+        let hlColorOk = false;
+        let hlPalOk = false;
         // 第 46 轮：链接走蓝色系、带完整目录、面包屑字号
         let wikiPathOk = false;
         let crumbOk = false;
@@ -2807,6 +2810,56 @@ function runSmoke() {
           hlOk = !!hl && hl.text === '重点' && !hl.line.includes('==')
             && !!hl.bg && hl.bg !== 'rgba(0, 0, 0, 0)' && hl.bg !== 'transparent';
 
+          // (d2) 高亮可选颜色：设置面板换色 + 快捷栏右键色板，两条路都得真的改到 --mark。
+          // 只认 computed backgroundColor，不认 data-hl 属性 —— 属性写上了但 CSS 没跟上，
+          // 对用户来说就是「点了没反应」
+          try {
+            const setColor = JSON.parse(String(await js(`(() => {
+              const b = document.querySelector('#seg-hl span[data-v="green"]');
+              if (!b) return '{"err":"nobtn"}';
+              b.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              const el = document.querySelector('#editor-host .cm-hl');
+              return JSON.stringify({
+                attr: document.documentElement.getAttribute('data-hl'),
+                bg: el ? getComputedStyle(el).backgroundColor : ''
+              });
+            })()`)));
+            // 奶油亮色的绿 = #cfe6bd
+            hlColorOk = setColor.attr === 'green' && setColor.bg === 'rgb(207, 230, 189)';
+            console.log('SMOKE hlColor=' + (hlColorOk ? 'ok' : 'bad') + ' ' + JSON.stringify(setColor));
+
+            const dots = JSON.parse(String(await js(`(() => {
+              const b = document.querySelector('[data-qb="hl"]');
+              if (!b) return '{"dots":0}';
+              b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+              const p = document.querySelector('.qb-pal');
+              const on = p && p.querySelector('.qb-dot.on');
+              return JSON.stringify({
+                dots: p ? p.querySelectorAll('.qb-dot').length : 0,
+                on: on ? on.dataset.c : ''
+              });
+            })()`)));
+            await wait(150);
+            const picked = JSON.parse(String(await js(`(() => {
+              const d = document.querySelector('.qb-pal .qb-dot[data-c="pink"]');
+              if (!d) return '{"err":"nodot"}';
+              d.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              const el = document.querySelector('#editor-host .cm-hl');
+              return JSON.stringify({
+                attr: document.documentElement.getAttribute('data-hl'),
+                bg: el ? getComputedStyle(el).backgroundColor : '',
+                pal: !!document.querySelector('.qb-pal')
+              });
+            })()`)));
+            // 粉色 = #fbd5e0；色板要标出当前是哪支笔，选完自己收起来
+            hlPalOk = dots.dots === 6 && dots.on === 'green' && picked.attr === 'pink'
+              && picked.bg === 'rgb(251, 213, 224)' && picked.pal === false;
+            console.log('SMOKE hlPal=' + (hlPalOk ? 'ok' : 'bad') +
+              ' dots=' + dots.dots + ' on=' + dots.on + ' ' + JSON.stringify(picked));
+          } catch (err) {
+            console.log('SMOKE hlColorFailed=' + err.message);
+          }
+
           // (e) 笔记链接：默认写成 `[[目录/标题]]`，关掉开关只剩 `[[标题]]`；
           // 同时确认链接是蓝色系（石墨配色以前是红的），面包屑字号也放大了
           const press = k => js(`(() => {
@@ -2895,13 +2948,14 @@ function runSmoke() {
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
+          && hlColorOk && hlPalOk
           && dragBarOk && qbCaretOk && qbSelOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
-          newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk
+          newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {

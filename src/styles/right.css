@@ -218,3 +218,23 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 .qb-btn:active{background:var(--hover-soft);transform:scale(.92)}
 .qb-btn:focus-visible{outline:2px solid var(--sel-border);outline-offset:1px}
 .qb-sep{width:1px;height:16px;background:var(--border);margin:0 5px;flex:none}
+
+/* 高亮色板：右键高亮按钮时浮在快捷栏上方。
+   left 由 JS 按按钮中心算，这里只管垂直方向和观感 */
+.qb-pal{position:absolute;bottom:calc(100% + 9px);transform:translateX(-50%);
+  display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:11px;
+  background:var(--bg-elev);border:1px solid var(--border);
+  box-shadow:0 8px 24px var(--shadow-lg),0 1px 2px var(--shadow);z-index:31}
+.qb-dot{width:17px;height:17px;padding:0;border:0;border-radius:50%;cursor:pointer;flex:none;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.14);
+  transition:transform .12s,box-shadow .12s}
+.qb-dot:hover{transform:scale(1.14)}
+.qb-dot.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.14),
+  0 0 0 2px var(--bg-elev),0 0 0 3.5px var(--t4)}
+/* 色值统一走 tokens.css 的 --hlc-*，和设置面板里那排圆点同源 */
+.qb-dot[data-c="yellow"]{background:var(--hlc-yellow)}
+.qb-dot[data-c="green"]{background:var(--hlc-green)}
+.qb-dot[data-c="blue"]{background:var(--hlc-blue)}
+.qb-dot[data-c="pink"]{background:var(--hlc-pink)}
+.qb-dot[data-c="purple"]{background:var(--hlc-purple)}
+.qb-dot[data-c="orange"]{background:var(--hlc-orange)}

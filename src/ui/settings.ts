@@ -68,6 +68,7 @@ export function syncSettingsUI(): void {
 
   syncSeg('seg-scheme', s.scheme);
   syncSeg('seg-theme', s.theme);
+  syncSeg('seg-hl', s.hlColor);
   syncSeg('seg-size', String(s.size));
   syncSeg('seg-lh', String(s.lh));
   syncSeg('seg-close', s.closeAction);
@@ -105,6 +106,8 @@ export function initSettingsUI(): void {
   /* ---- 分段选择器 ---- */
   bindSeg('seg-scheme', 'scheme', undefined, applySettings);
   bindSeg('seg-theme', 'theme', undefined, applySettings);
+  // 高亮色和色系、明暗一样，改完立刻重刷 <html> 上的属性
+  bindSeg('seg-hl', 'hlColor', undefined, applySettings);
   bindSeg('seg-size', 'size', parseFloat, applySettings);
   bindSeg('seg-lh', 'lh', parseFloat, applySettings);
   bindSeg('seg-close', 'closeAction');

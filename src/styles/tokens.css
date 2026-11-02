@@ -50,6 +50,14 @@ html,body{height:100%}
   --hl:#fdf0c4;
   --hl-hit:#ffe89a;
   --mark:#ffdfb2;
+  /* 色板本身用的颜色：设置面板和快捷栏的圆点共用这一组。
+     它不跟明暗走 —— 选色时看到的是什么颜色，正文里就是什么颜色 */
+  --hlc-yellow:#ffe9a3;
+  --hlc-green:#cfe6bd;
+  --hlc-blue:#d3e2f8;
+  --hlc-pink:#fbd5e0;
+  --hlc-purple:#e4d8f8;
+  --hlc-orange:#ffdcb5;
   /* 链接固定走蓝色系：六套配色都往蓝里靠，红/绿链接会读成「报错」 */
   --link:#2f5fd0;
   --link-line:#ccd9f2;
@@ -402,3 +410,24 @@ html[data-scheme="graphite"][data-theme="dark"]{
 /* 字体：字体族只切换 --font-ui，正文 / UI 一起变 */
 html[data-font="wenkai"]{--font-ui:"LXGW WenKai","PingFang SC","Microsoft YaHei",serif}
 html[data-font="clean"]{--font-ui:"Inter","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif}
+
+/* ============================================================
+   高亮颜色（`==文字==` 的马克笔）
+   只覆盖 --mark 一个变量，所以放在最后：
+   它和 data-scheme / data-theme 是三个正交维度，六套配色都能换笔。
+   亮色用淡底 + 深字，暗色用沉底 + 亮字，两边都保住正文可读性。
+   暗色那条多带一个 [data-theme="dark"]，特异性压过上面所有色系定义。
+   ============================================================ */
+html[data-hl="yellow"]{--mark:#ffe9a3}
+html[data-hl="green"]{--mark:#cfe6bd}
+html[data-hl="blue"]{--mark:#d3e2f8}
+html[data-hl="pink"]{--mark:#fbd5e0}
+html[data-hl="purple"]{--mark:#e4d8f8}
+html[data-hl="orange"]{--mark:#ffdcb5}
+
+html[data-hl="yellow"][data-theme="dark"]{--mark:#5b4a17}
+html[data-hl="green"][data-theme="dark"]{--mark:#3e4f2d}
+html[data-hl="blue"][data-theme="dark"]{--mark:#24384f}
+html[data-hl="pink"][data-theme="dark"]{--mark:#4d2b36}
+html[data-hl="purple"][data-theme="dark"]{--mark:#3c3054}
+html[data-hl="orange"][data-theme="dark"]{--mark:#4f3418}

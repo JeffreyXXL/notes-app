@@ -95,12 +95,12 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + click does nothing + double-click into source → click an internal link → todo resolutions → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + click does nothing + double-click into source → click an internal link → todo resolutions → switch the highlight colour (settings panel + right-click palette) → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
 | `scheme-{cream,graphite,paper}-{light,dark}.png` | One per color scheme × light/dark |
-| `settings-appearance.png` | Settings: name / scheme / light-dark / security |
+| `settings-appearance.png` | Settings: name / scheme / light-dark / highlight / security |
 | `meta-tags.png` | Tag multi-select in the "organize" sheet |
 | `left-rename.png` | Inline rename field in the left pane |
 | `desktop-image.png` | Image in the body (full window) |
@@ -171,9 +171,11 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 **Writing notes**
 - The `新建笔记` (New note) button at the top right of the middle pane — or `Ctrl/Cmd + N` — starts a note. The title is the first `# Heading` line of the body.
 - Typing `# `, `- `, `- [ ] `, `> `, `**bold**`, `` `code` `` immediately renders into the corresponding style.
-- `==highlight==` gives a soft marker-pen band behind the text. It's a per-theme colour, deliberately a different hue from
-  the italic band and from the yellow search hit, so the three don't get confused. `Ctrl/Cmd + Shift + H` or the
-  highlighter button in the quick bar wraps the selection.
+- `==highlight==` gives a soft marker-pen band behind the text. **The colour is yours to pick**: Settings →
+  Appearance → Highlight offers six pens (yellow / green / blue / pink / purple / orange), all working across the three
+  schemes in both light and dark — or right-click the highlighter button in the quick bar to switch on the spot.
+  It deliberately uses a different hue from the italic band and from the yellow search hit, so the three don't get
+  confused. `Ctrl/Cmd + Shift + H` or the highlighter button in the quick bar wraps the selection.
 - When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
 - **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
   Enter starts the next line with the same marker: ordered lists increment, new todos always start unchecked, indentation
@@ -185,7 +187,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 
 **Bottom quick bar**
 - A floating toolbar sits at the bottom of the editor so you don't have to remember syntax. It floats over the text rather than taking up layout space (the body already leaves room at the bottom).
-- The left group is inline formatting: bold / italic / strikethrough / highlight / inline code / link.
+- The left group is inline formatting: bold / italic / strikethrough / highlight (right-click to change its colour) / inline code / link.
 - The right group is block elements: image / heading / list / todo / quote / table / divider.
 - With a selection, the format wraps the selection; clicking the same button again removes it. With no selection, it inserts a pair of markers and puts the cursor in between.
 - The heading button cycles: body → `##` → `###` → body.
@@ -479,7 +481,7 @@ notes-app/
 │   │   ├── lock.ts            lock screen + set-password dialog (WebCrypto digest, FNV fallback)
 │   │   └── titlebar.ts        custom window buttons and drag regions for the frameless window
 │   └── styles/                CSS split by area
-│       ├── tokens.css         ★ all colors live here (3 schemes × light/dark = 6 sets, including code highlight colors)
+│       ├── tokens.css         ★ all colors live here (3 schemes × light/dark = 6 sets, plus 6 highlighter pens, including code highlight colors)
 │       ├── base.css           three-pane grid / collapse / frameless window buttons / toasts
 │       ├── left.css           left pane (colors via the --side-* group, invertible on its own)
 │       ├── mid.css            middle pane cards / swipe action bar

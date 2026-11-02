@@ -44,6 +44,14 @@ export type ThemeMode = 'light' | 'dark' | 'auto';
 /** 色系：奶油（暖米）/ 石墨（深侧边 + 朱红）/ 纸白（中性） */
 export type ThemeScheme = 'cream' | 'graphite' | 'paper';
 export type CloseAction = 'tray' | 'quit';
+/**
+ * 高亮（`==文字==`）的颜色。
+ *
+ * Markdown 的 `==…==` 本身不带颜色参数，所以这里是「整个库用哪支马克笔」，
+ * 而不是给每一处单独上色 —— 好处是 .md 保持纯文本，别的编辑器打开也不会
+ * 多出看不懂的标记。
+ */
+export type HlColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange';
 
 export interface Settings {
   font: FontId;
@@ -62,6 +70,8 @@ export interface Settings {
   titleRename: boolean;
   /** 插入笔记链接时写成 `[[目录/标题]]` 而不是 `[[标题]]`，同名笔记才分得清 */
   linkPath: boolean;
+  /** `==高亮==` 用哪支颜色的马克笔 */
+  hlColor: HlColor;
   /** 左栏目录的手动顺序（库内路径，从前往后） */
   folderOrder: string[];
   /** 左栏标签的手动顺序 */

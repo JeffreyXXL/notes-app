@@ -11,6 +11,9 @@ import {
   TABLE_TEMPLATE
 } from '../editor/commands';
 import { pickImages } from '../editor/image-insert';
+import { HL_COLORS } from '../settings';
+import { store, saveSettings } from '../store';
+import type { HlColor } from '../types';
 
 interface Cmd {
   id: string;
@@ -46,8 +49,9 @@ const CMDS: (Cmd | null)[] = [
   },
   {
     id: 'hl',
-    title: '高亮  Ctrl+Shift+H',
-    icon: svg(`<rect x="2.6" y="6.2" width="10.8" height="3.6" rx="1.2" fill="currentColor" opacity=".26"/><path d="M4.6 4.4h6.8M4.6 12.2h4.4" ${stroke}/>`),
+    title: '高亮  Ctrl+Shift+H（右键换颜色）',
+    // 中间那条色带直接用 --mark 上色，所以换笔之后图标跟着变，一眼能看出当前颜色
+    icon: svg(`<rect x="2.6" y="6.2" width="10.8" height="3.6" rx="1.2" fill="var(--mark)" stroke="currentColor" stroke-opacity=".4"/><path d="M4.6 4.4h6.8M4.6 12.2h4.4" ${stroke}/>`),
     run: v => toggleWrap(v, '==', '==', '高亮')
   },
   {
@@ -124,6 +128,41 @@ export function quickbarHTML(): string {
   return `<div class="quickbar" id="quickbar">${body}</div>`;
 }
 
+/** 右键唤出的色板；同一时刻只存在一个 */
+let palette: HTMLElement | null = null;
+
+/**
+ * 关掉色板。
+ *
+ * 监听器是「打开时挂、关闭时摘」，不在 bindQuickbar 里常驻一份：
+ * 每换一篇笔记都会重建快捷栏并重新 bind 一次，常驻的 document 监听
+ * 会一份份攒下来。
+ */
+function closePalette(): void {
+  document.removeEventListener('mousedown', onOutsideDown, true);
+  if (!palette) return;
+  palette.remove();
+  palette = null;
+}
+
+function onOutsideDown(e: MouseEvent): void {
+  if (palette && palette.contains(e.target as Node)) return;
+  closePalette();
+}
+
+/**
+ * 换一支马克笔。
+ *
+ * 高亮色只是 <html> 上的一个属性，正文颜色全由 CSS 变量接管，
+ * 所以不用重建编辑器 —— 正在编辑的笔记不会闪，光标和滚动位置也都还在。
+ * 和 theme.ts 的 applySettings 里那一行是同一个约定。
+ */
+function useHlColor(color: HlColor): void {
+  store.settings.hlColor = color;
+  saveSettings();
+  document.documentElement.setAttribute('data-hl', color);
+}
+
 export function bindQuickbar(view: EditorView): void {
   const bar = document.getElementById('quickbar');
   if (!bar) return;
@@ -145,7 +184,44 @@ export function bindQuickbar(view: EditorView): void {
     saved = { anchor: s.anchor, head: s.head };
   });
 
+  /* ---- 高亮：右键唤出色板 ---- */
+  bar.addEventListener('contextmenu', e => {
+    const btn = (e.target as HTMLElement).closest('[data-qb="hl"]') as HTMLElement | null;
+    if (!btn) return;
+    e.preventDefault();
+    // 右键不移动光标，选区还在；存一份，选完颜色要拿它去套高亮
+    const s = view.state.selection.main;
+    saved = { anchor: s.anchor, head: s.head };
+
+    if (palette) { closePalette(); return; }
+
+    const pal = document.createElement('div');
+    pal.className = 'qb-pal';
+    pal.innerHTML = HL_COLORS.map(c =>
+      `<button class="qb-dot${store.settings.hlColor === c.id ? ' on' : ''}" data-c="${c.id}"` +
+      ` title="${c.name}" aria-label="${c.name}"></button>`
+    ).join('');
+    // 挂在按钮正上方：.quickbar 自己是绝对定位，正好当包含块
+    pal.style.left = `${btn.offsetLeft + btn.offsetWidth / 2}px`;
+    bar.appendChild(pal);
+    palette = pal;
+    document.addEventListener('mousedown', onOutsideDown, true);
+  });
+
   bar.addEventListener('click', e => {
+    // 色板里的圆点：换笔；如果本来选着一段字，顺手就套上高亮
+    const dot = (e.target as HTMLElement).closest('[data-c]') as HTMLElement | null;
+    if (dot) {
+      const sel = saved ?? view.state.selection.main;
+      const picked = sel.anchor !== sel.head;
+      useHlColor(dot.dataset.c as HlColor);
+      closePalette();
+      if (saved) view.dispatch({ selection: saved });
+      saved = null;
+      if (picked) toggleWrap(view, '==', '==', '高亮');
+      return;
+    }
+
     const btn = (e.target as HTMLElement).closest('[data-qb]') as HTMLElement | null;
     if (!btn) return;
     const cmd = CMDS.find(c => c && c.id === btn.dataset.qb);
