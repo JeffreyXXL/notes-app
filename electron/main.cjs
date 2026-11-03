@@ -1121,6 +1121,9 @@ function runSmoke() {
         // 第 53 轮：逐处上色（`==字=={green}`）、点代码块能进去、隐形「＋」不吃点击、
         // 行级快捷按钮点完光标落到行尾
         let hlEachOk = false;
+        // 第 54 轮：空光标按色板不能写出「高亮」占位词；链接平点落光标、Ctrl+点才跳
+        let hlEmptyOk = false;
+        let imgClick2Ok = false;
         let blockClickOk = false;
         let plusHitOk = false;
         let qbEndOk = false;
@@ -2156,6 +2159,46 @@ function runSmoke() {
           // 光标在图片那行时应变成 0/1（源码态）
           imgEditOk = String(after) === '0/1';
 
+          // 连点两下图片：第一下选中（出工具条），第二下进源码。
+          // 以前只有双击能进，单击永远出不来光标 —— 图片那一行等于点不进去
+          try {
+            const linePt = await js(`(()=>{
+              const l = document.querySelector('#editor-host .cm-line');
+              if (!l) return null;
+              const r = l.getBoundingClientRect();
+              return { x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            const imgPt = () => js(`(()=>{
+              const e = document.querySelector('.cm-img img');
+              if (!e) return null;
+              e.scrollIntoView({ block: 'center' });
+              const r = e.getBoundingClientRect();
+              return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            const st = () => js("document.querySelectorAll('.cm-img').length + '/' +"
+              + " document.querySelectorAll('#editor-host .cm-imgline').length");
+            // clickAt 在下面才声明，这里自己发一遍（同一个道理：真鼠标事件才走命中测试）
+            const tap = async pt => {
+              if (!pt) return false;
+              win.webContents.sendInputEvent({ type: 'mouseDown', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+              win.webContents.sendInputEvent({ type: 'mouseUp', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+              await wait(400);
+              return true;
+            };
+            // 先把光标挪到别的行，图片重新渲染回来
+            await tap(linePt);
+            const back = String(await st());
+            await tap(await imgPt());
+            const first = String(await st());
+            await tap(await imgPt());
+            const second = String(await st());
+            imgClick2Ok = back === '1/0' && first === '1/0' && second === '0/1';
+            console.log('SMOKE imgClick2=' + (imgClick2Ok ? 'ok' : 'bad') +
+              ' back=' + back + ' 1st=' + first + ' 2nd=' + second);
+          } catch (err) {
+            console.log('SMOKE imgClick2Failed=' + err.message);
+          }
+
           // 粘贴图片：合成一个带图片文件的 paste 事件，走完整的「落盘 + 插入」链路。
           // 这是没法用真鼠标点的部分（系统文件选择框脚本点不了），只能这么验。
           const pasted = await js(`(async () => {
@@ -2369,19 +2412,53 @@ function runSmoke() {
           console.log('SMOKE linkShot=' + (await saveShot('note-links.png')));
           win.hide();
 
-          // 真点一下 `[[图片测试]]`，应该跳到那篇
-          const lp = await js(`(()=>{
+          // 平点一下 `[[图片测试]]`：光标要落进这一行，不能跳走。
+          // 以前平点就跳转，等于带链接的行整行都点不进光标 —— 就是用户报的那个
+          const linkPt = () => js(`(()=>{
             const a = document.querySelector('.cm-wikilink');
             if (!a) return null;
+            a.scrollIntoView({ block: 'center' });
             const r = a.getBoundingClientRect();
             return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
           })()`);
-          await clickAt(lp);
+          await clickAt(await linkPt());
+          const wikiCaret = String(await js(`(()=>{
+            const s = getSelection();
+            const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+            const line = el && el.closest ? el.closest('.cm-line') : null;
+            return line ? line.textContent : '';
+          })()`));
+          console.log('SMOKE wikiCaret=' + JSON.stringify(wikiCaret.slice(0, 26)));
+
+          // 光标挪开这一行，链接才会重新渲染成可点的样子
+          const headPt = await js(`(()=>{
+            const l = document.querySelector('#editor-host .cm-line');
+            if (!l) return null;
+            const r = l.getBoundingClientRect();
+            return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) };
+          })()`);
+          await clickAt(headPt);
+          await wait(300);
+
+          // Ctrl+点才是打开链接
+          const lp2 = await linkPt();
+          if (lp2) {
+            win.webContents.sendInputEvent({
+              type: 'mouseDown', x: lp2.x, y: lp2.y, button: 'left',
+              clickCount: 1, modifiers: ['control']
+            });
+            win.webContents.sendInputEvent({
+              type: 'mouseUp', x: lp2.x, y: lp2.y, button: 'left',
+              clickCount: 1, modifiers: ['control']
+            });
+            await wait(700);
+          }
           const activeTitle = await js("(document.querySelector('.card.active h4') || {}).textContent || ''");
           console.log('SMOKE linkJump=' + JSON.stringify(activeTitle));
 
           linkOk = li.wiki === 2 && li.note === 1 && li.add === 1
             && String(li.noteText).indexOf('换成新方案') >= 0
+            && wikiCaret.includes('[[图片测试]]')
             && String(activeTitle).trim() === '图片测试';
         } catch (err) {
           console.log('SMOKE linkFailed=' + err.message);
@@ -3174,6 +3251,43 @@ function runSmoke() {
             console.log('SMOKE hlColorFailed=' + err.message);
           }
 
+          // (d5) 空光标按色板：只插一对空的 `==|==`，正文里不能多出「高亮」两个字。
+          // 以前这里插的是 `==高亮==` 并把「高亮」框成选区，一按色板就凭空多俩字
+          try {
+            await typeText('\n');
+            await wait(300);
+            const pal = JSON.parse(String(await js(`(() => {
+              const b = document.querySelector('[data-qb="hl"]');
+              if (!b) return '{"err":"nobtn"}';
+              b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+              const d = document.querySelector('.qb-pal .qb-dot[data-c="orange"]');
+              if (!d) return '{"err":"nodot"}';
+              d.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              return '{"ok":1}';
+            })()`)));
+            await wait(250);
+            await typeText('Zz');
+            await wait(400);
+            const hlEmptyLine = String(await js(`(()=>{
+              const s = getSelection();
+              const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+              const line = el && el.closest ? el.closest('.cm-line') : null;
+              return line ? line.textContent : '';
+            })()`));
+            hlEmptyOk = pal.ok === 1 && hlEmptyLine.includes('==Zz==')
+              && !hlEmptyLine.includes('高亮');
+            console.log('SMOKE hlEmpty=' + (hlEmptyOk ? 'ok' : 'bad') +
+              ' line=' + JSON.stringify(hlEmptyLine.slice(0, 30)));
+            // 撤销掉这行测试文字。undo 这个助手不在这层作用域，直接发 Ctrl+Z
+            for (let i = 0; i < 2; i++) {
+              win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
+              win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
+              await wait(350);
+            }
+          } catch (err) {
+            console.log('SMOKE hlEmptyFailed=' + err.message);
+          }
+
           // (e) 笔记链接：默认写成 `[[目录/标题]]`，关掉开关只剩 `[[标题]]`；
           // 同时确认链接是蓝色系（石墨配色以前是红的），面包屑字号也放大了
           const press = k => js(`(() => {
@@ -3264,6 +3378,7 @@ function runSmoke() {
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
+          && hlEmptyOk && imgClick2Ok
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
@@ -3271,7 +3386,7 @@ function runSmoke() {
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
-          hlEachOk, blockClickOk, plusHitOk,
+          hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);

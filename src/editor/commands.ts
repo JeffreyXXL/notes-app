@@ -119,7 +119,7 @@ function hlAt(state: EditorState, pos: number): HlHit | null {
  * - 光标/选区整个落在某处高亮里、点了别的笔 → 只改那处的色号，正文一个字不动
  * - 同上、点的还是同一支笔 → 整处取消（当开关用）
  * - 选了字、外面没有高亮 → 包一层，需要时补色号
- * - 只点了光标、也不在任何高亮里 → 插一对空的，光标停在「高亮」上直接改名
+ * - 只点了光标、也不在任何高亮里 → 插一对空的 `==|==`，直接打字就是高亮
  *
  * 「光标停在高亮里」这条最要紧：想给已有的高亮换个颜色，人一定是先点进去
  * 再选色。少了这条就会在旁边新插一对 `==`，把一处高亮劈成两处。
@@ -153,12 +153,14 @@ export function toggleHighlight(view: EditorView, color: HlColor): void {
     return;
   }
 
-  // ② 只点了光标：插一对空的，光标框住占位词
+  // ② 只点了光标：插一对空的，光标停在两个 `==` 中间，直接打字就是高亮。
+  // 以前这里插的是 `==高亮==` 并框住「高亮」两个字 —— 占位词被当成真文字，
+  // 一按色板正文里就多出「高亮」俩字，用户第一反应是「怎么冒出这个词」。
+  // 空壳 `==|==` 和加粗的 `**|**` 是一个路子，不写假字。
   if (sel.from === sel.to) {
-    const text = `==高亮==${suffix}`;
     view.dispatch({
-      changes: { from: sel.from, insert: text },
-      selection: { anchor: sel.from + 2, head: sel.from + 4 }
+      changes: { from: sel.from, insert: `====${suffix}` },
+      selection: { anchor: sel.from + 2 }
     });
     return;
   }

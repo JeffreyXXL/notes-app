@@ -141,11 +141,14 @@ A few assertions worth keeping:
 | `codeClick=1/2` | **A single click drops the cursor into the code block** (one block fewer, two fence lines more). It used to do nothing at all, which users reported as "these lines can't be clicked" |
 | `blockClick=ok {"blocks":0,"fences":2}` | Same thing, verified independently on another note |
 | `link={"wiki":2,"note":1,"add":1}` | Two internal links / one todo resolution / one `＋` button |
-| `linkJump="图片测试"` | Clicking `[[图片测试]]` really navigates there (verified via the selected card in the middle pane) |
+| `wikiCaret="点这里跳到 [[图片测试]]。"` | **A plain click on a link drops the caret in that line** instead of navigating |
+| `linkJump="图片测试"` | **Ctrl + click** on `[[图片测试]]` is what actually navigates (verified via the selected card in the middle pane) |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
 | `hlEach=ok {"a":{"cls":"cm-hl cm-hl-green",…},"b":{"cls":"cm-hl cm-hl-pink",…}}` | **Two highlights on one line, each with its own colour** — and the line renders as just 甲乙, markers and colour ids hidden |
 | `hlPal=ok on=green raw="==甲=={green}==乙=={pink}" now="==甲=={purple}==乙=={pink}"` | Right-click recolour of an existing highlight: **only the colour id changes**, the number of `==` is identical (one highlight never gets split into two) |
+| `hlEmpty=ok line="==Zz=={orange}…"` | An empty caret plus a colour dot inserts an empty pair only — typing gives `==Zz==`, and **no 「高亮」 placeholder lands in the note** |
+| `imgClick2=ok back=1/0 1st=1/0 2nd=0/1` | The first click only selects the image; a **second click** enters source. A single click used to never produce a caret |
 | `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
 | `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
@@ -183,7 +186,9 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   and six pens pop up (yellow / green / blue / pink / purple / orange); pick one and that spot gets it. Put the cursor
   inside an existing highlight and pick a different pen to recolour it in place — not a single character of the text
   changes. The colour is written after the markers as `==重点=={green}`; when it matches the default pen it's left
-  out, so most highlights stay a plain `==重点==`. The default pen lives in Settings → Appearance → Highlight and is
+  out, so most highlights stay a plain `==重点==`. Pressing the highlighter with nothing selected inserts an empty
+  `==|==` with the caret in the middle — it never writes a placeholder word into your note.
+  The default pen lives in Settings → Appearance → Highlight and is
   what the button and the shortcut use.
 - When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
 - **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
@@ -212,7 +217,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - An image must be **alone on its line** to render; one embedded mid-sentence stays as Markdown source.
 - **A single click only selects** the image — it does not flip to text. Once selected, an outline appears around it,
   a size toolbar floats at the top right and a drag handle appears at the bottom right. Click elsewhere to deselect.
-- **Double-clicking** the image puts the cursor in and reverts it to `![alt](path)` source, for editing the path or alt text.
+- **Clicking a selected image again** (or double-clicking) puts the cursor in and reverts it to `![alt](path)` source, for editing the path or alt text.
   The "edit" button at the far right of the toolbar does the same thing.
 - **Images can be copied.** With one selected, hit 复制 in the toolbar or just press `Ctrl/Cmd + C` — the picture itself
   goes onto the system clipboard, ready to paste into WeChat, Word, Paint. You get the original bytes (PNG / JPEG as stored),
@@ -250,22 +255,26 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   It understands `js/ts/jsx`, `json`, `py`, `sh/bash`, `html/xml`, `css/scss`, `sql`, `go`, `rust`, `java/c/c++/c#`, `yaml`, `toml`,
   plus aliases (`typescript`, `python`, `bash`, `rs`, `c++`…). Unknown languages are shown verbatim, no error.
 - Highlight colors come from CSS variables (`--hl-kw` / `--hl-str` / …), so switching scheme or light/dark needs no recomputation.
-- **Double-clicking a code block** puts the cursor in and reverts the block to source; click elsewhere to render again — the same interaction as images.
-  **A single click does nothing**: it used to explode into source, so scrolling, selecting a word to copy, or a slightly-off click
-  all required clicking back. Hovering shows a "双击编辑" (double-click to edit) hint.
+- **A single click on a code block** puts the cursor in and reverts the block to source; click elsewhere to render again.
+  The caret lands on the first line of code, so there is no second click to make. It used to accept only a double-click,
+  which read as "these lines can't be clicked at all"; double-click still works too.
+- Dragging across a block still selects text instead of exploding it: a drag is not a click.
 - A `| a | b |` inside a code block is not mistaken for a table, and `![x](y)` is not mistaken for an image (the whole block is code; nothing inside is parsed).
 - The old approach was "hide the two fence lines, tint every line in between" — but the hidden fences still participated in selection
   arithmetic, so dragging a selection across a code block painted it in empty space and looked misaligned. Now the block is a single
   widget and the problem is gone.
 
 **Linking to another note**
-- Both forms are recognized, and both navigate on click:
+- Both forms are recognized, and both navigate on **Ctrl/Cmd + click**:
 
   ```markdown
   see [[产品方向思考]]                     ← by title, easiest
   see [last conclusion](工作/产品/方向.md)  ← by path, most precise
   ```
 
+- **A plain click on a link does not navigate** — it just drops the caret in, and the line switches to source like any other.
+  Navigating takes `Ctrl` / `Cmd`. Plain clicks used to navigate, which meant every line containing a link was a line you
+  could not put a cursor into; with a few links in a note, that reads as "half the page is unclickable".
 - `[[title]]` matches in stages: relative to the current note's folder → vault path → same filename → same title → title contains
   (only if the result is unique). So after a note is renamed, `[[old title]]` still finds it.
 - The quick bar's internal-link button writes the **full path** (`[[客户/项目/标题]]`) by default. The vault is split by customer,
@@ -708,8 +717,8 @@ so it doesn't flip-flop. Any future code that reads a file and processes it line
 So deleting `clickToEdit` alone did nothing — `mousedown` on the `figure` had to `preventDefault()` + `stopPropagation()` to
 intercept before it reaches `contentDOM`. Only then can a single click mean "select".
 
-Code blocks later moved to double-click-to-edit and hit **the same trap**: `dblClickToEdit()` must also swallow `mousedown`, or the
-click puts the cursor inside the block, `codeField` instantly reverts it to source, and `dblclick` never gets dispatched.
+Code blocks hit **the same trap**: `clickToEnter()` must also swallow `mousedown`, or CodeMirror puts the cursor into the block
+first, `codeField` instantly reverts it to source, and our own click handler never gets a turn.
 One sentence: **if "cursor inside the block" is what reveals the source, the mouse event must be intercepted at the `mousedown` stage.**
 
 **⑧ Resizing rebuilds the whole widget, so selection state can't live in the DOM**

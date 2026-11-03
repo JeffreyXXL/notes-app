@@ -455,7 +455,12 @@ class CodeWidget extends WidgetType {
     pre.appendChild(code);
     wrap.appendChild(pre);
 
-    clickToEnter(wrap, view, this.pos);
+    // 落点放在第一行代码上，而不是围栏行：点一下就能直接改代码，
+    // 不用再点第二下。围栏行反正也一起露出来了
+    const doc = view.state.doc;
+    const fence = doc.lineAt(Math.min(this.pos, doc.length));
+    const enter = fence.number < doc.lines ? doc.line(fence.number + 1).from : fence.from;
+    clickToEnter(wrap, view, enter);
     return wrap;
   }
 
@@ -639,6 +644,8 @@ class ImageWidget extends WidgetType {
   override toDOM(view: EditorView): HTMLElement {
     const fig = document.createElement('figure');
     fig.className = 'cm-img' + (this.selected ? ' selected' : '');
+    // 光靠双击进源码没人猜得到，鼠标停上来至少说一句
+    fig.title = '点一下选中，再点一下编辑';
 
     const url = assetUrl(this.src, this.base);
     if (!url) {
@@ -702,7 +709,10 @@ class ImageWidget extends WidgetType {
       e.stopPropagation();
       // 拖了一下（想选图里的东西）就不算单击
       if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) > 4) return;
-      this.select(view);
+      // 已经选中了再点一下 → 进源码。否则这一行永远点不出光标：
+      // 第一次点只是「选中」，想编辑只能靠双击，没人猜得到
+      if (view.state.field(selectedImageField) === this.pos) this.edit(view);
+      else this.select(view);
     });
 
     fig.addEventListener('dblclick', e => {
@@ -979,13 +989,19 @@ export function linkAt(state: EditorState, pos: number): LinkHit | null {
  *      冒泡到 view.dom 时它已经把光标挪进这一行了；
  *   2. 命中就立刻 preventDefault + stopPropagation，光标不动 ——
  *      光标一进这一行，整行会切回源码，链接的 span 当场被替换掉。
+ *
+ * 只有按住 Ctrl / Cmd 才算「打开链接」。以前平点一下就跳走，于是**带链接的行
+ * 整行都点不进光标** —— 用户报的「有些行点不到、光标进不去」就是这里。
+ * 平点现在是普通点击：光标落进来、这一行切回源码，跟点别的文字没区别。
  */
 export const linkPlugin = ViewPlugin.fromClass(
   class {
     private readonly onDown: (e: MouseEvent) => void;
+    private readonly onOver: (e: MouseEvent) => void;
     constructor(readonly view: EditorView) {
       this.onDown = (e: MouseEvent) => {
-        if (e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        if (e.button !== 0) return;
+        if (!(e.ctrlKey || e.metaKey)) return;
         if (!linkHandler) return;
         const t = e.target as HTMLElement | null;
         if (!t?.closest?.('.cm-link')) return;
@@ -999,9 +1015,19 @@ export const linkPlugin = ViewPlugin.fromClass(
         e.stopPropagation();
         linkHandler(hit.target, hit.kind);
       };
+      // 光标样式和提示都在这儿补：Decoration.mark 只能挂 class，挂不了 title
+      this.onOver = (e: MouseEvent) => {
+        const t = e.target as HTMLElement | null;
+        const link = t?.closest?.('.cm-link') as HTMLElement | null;
+        if (link && !link.title) link.title = 'Ctrl+点击打开';
+      };
       view.dom.addEventListener('mousedown', this.onDown, true);
+      view.dom.addEventListener('mouseover', this.onOver);
     }
-    destroy(): void { this.view.dom.removeEventListener('mousedown', this.onDown, true); }
+    destroy(): void {
+      this.view.dom.removeEventListener('mousedown', this.onDown, true);
+      this.view.dom.removeEventListener('mouseover', this.onOver);
+    }
   }
 );
 
