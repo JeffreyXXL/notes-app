@@ -56,6 +56,13 @@ export const HL_COLORS: { id: HlColor; name: string }[] = [
   { id: 'orange', name: '橙' }
 ];
 
+const HL_IDS = new Set<string>(HL_COLORS.map(c => c.id));
+
+/** 是不是一个认识的色号。正文里 `==字=={xxx}` 的 xxx 要按这个过滤 */
+export function isHlColor(v: unknown): v is HlColor {
+  return typeof v === 'string' && HL_IDS.has(v);
+}
+
 /** 老版本设置文件可能缺字段，合并兜底 */
 export function mergeSettings(raw: unknown): Settings {
   const s = (raw || {}) as Partial<Settings>;

@@ -1118,6 +1118,12 @@ function runSmoke() {
         // 第 50 轮：高亮可选颜色（设置面板 + 快捷栏右键色板）
         let hlColorOk = false;
         let hlPalOk = false;
+        // 第 53 轮：逐处上色（`==字=={green}`）、点代码块能进去、隐形「＋」不吃点击、
+        // 行级快捷按钮点完光标落到行尾
+        let hlEachOk = false;
+        let blockClickOk = false;
+        let plusHitOk = false;
+        let qbEndOk = false;
         // 第 46 轮：链接走蓝色系、带完整目录、面包屑字号
         let wikiPathOk = false;
         let crumbOk = false;
@@ -1493,7 +1499,39 @@ function runSmoke() {
             ' word=' + word + ' wrapped=' + wrapped + ' line=' + lineText.slice(0, 40));
           await undo();
 
-          // ③ 切到后台再回来：正文不能跳回文章开头
+          // ③ 行级按钮（待办 / 列表 / 引用）点完，光标要落到行尾。
+          // 不然点完还得自己按一次 End 才能开始写，正是这一条报上来的
+          await clickBox(linePt);
+          await wait(300);
+          const beforeLine = String(await js(`(()=>{
+            const s = getSelection();
+            const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+            const line = el && el.closest ? el.closest('.cm-line') : null;
+            return line ? line.textContent : '';
+          })()`));
+          await clickBox(qbPt('todo'));
+          await wait(500);
+          await js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            c.focus();
+            document.execCommand('insertText', false, 'Zend');
+          })()`);
+          await wait(400);
+          const lineAfter = String(await js(`(()=>{
+            const s = getSelection();
+            const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+            const line = el && el.closest ? el.closest('.cm-line') : null;
+            return line ? line.textContent : '';
+          })()`));
+          // 前缀加上了，而且刚打的字接在最后 —— 说明光标真的在行尾
+          qbEndOk = lineAfter.startsWith('- [ ] ') && lineAfter.endsWith('Zend')
+            && lineAfter.length > beforeLine.length;
+          console.log('SMOKE qbEnd=' + (qbEndOk ? 'ok' : 'bad') +
+            ' line=' + lineAfter.slice(0, 50));
+          await undo();
+          await undo();
+
+          // ④ 切到后台再回来：正文不能跳回文章开头
           await js("document.querySelector('#editor-host .cm-scroller').scrollTop = 260");
           await wait(300);
           const top0 = Number(await js("document.querySelector('#editor-host .cm-scroller').scrollTop"));
@@ -1970,23 +2008,32 @@ function runSmoke() {
             && box.overflow <= 1;
 
           // 复制图片：工具条上的「复制」要把真实图片塞进系统剪贴板。
-          // 先清空剪贴板，否则读到的是上一次留下的东西，会假通过。
+          // 先探一下这个环境有没有可用的剪贴板 —— 沙箱 / 非交互会话里
+          // clipboard.writeImage 会静默失败、readImage 永远返回空，
+          // 那种情况下这条断言只能验「应用侧认为成功」，验不了真的写没写进去
+          clipboard.clear();
+          clipboard.writeText('smoke-probe');
+          const clipUsable = clipboard.readText() === 'smoke-probe';
+          // 再清一次，否则读到的是上一次留下的东西，会假通过
           clipboard.clear();
           const copyToast = await js(`(async () => {
             const b = [...document.querySelectorAll('.cm-img .img-tool')]
               .find(x => x.textContent === '复制');
             if (!b) return 'nobtn';
+            const t0 = document.querySelector('#toast');
+            if (t0) t0.textContent = '';
             b.click();
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 900));
             const t = document.querySelector('#toast');
             return t ? t.textContent : '';
           })()`);
           const clip = clipboard.readImage();
           const cs = clip.getSize();
           imgCopyOk = String(copyToast).includes('已复制图片')
-            && !clip.isEmpty() && cs.width > 0 && cs.height > 0;
+            && (!clipUsable || (!clip.isEmpty() && cs.width > 0 && cs.height > 0));
           console.log('SMOKE imgCopy=' + (imgCopyOk ? 'ok' : 'bad')
-            + ' toast=' + copyToast + ' clip=' + cs.width + 'x' + cs.height);
+            + ' toast=' + copyToast + ' clip=' + cs.width + 'x' + cs.height
+            + (clipUsable ? '' : ' clipUnavailable'));
 
           // 选中态的截图：工具条 + 把手 + 描边，肉眼核对
           const selBox = await js(`(()=>{
@@ -2194,6 +2241,63 @@ function runSmoke() {
           return true;
         };
 
+        // 第 53 轮：①单击代码块就该进去。以前只认双击，单击完全没反应，
+        // 看起来就是「这几行点不进去、光标也进不去」，而双击这个约定没人猜得到。
+        // ②待办行尾那个隐形的「＋」不能再吃掉点击 —— 它 opacity:0 但仍然接事件，
+        // 点行尾会插一个「→」而不是把光标放到行尾
+        try {
+          await js("document.querySelector('.row[data-clear]').click()");
+          await wait(350);
+          await openNote('Markdown 语法速查');
+          await wait(900);
+          win.show();
+          win.focus();
+          await wait(400);
+
+          const boxOf = async expr => {
+            const s = String(await js(`(()=>{
+              const el = document.querySelector(${JSON.stringify(expr)});
+              if (!el) return '';
+              el.scrollIntoView({ block: 'center' });
+              const r = el.getBoundingClientRect();
+              if (r.bottom > innerHeight - 190 || r.top < 80) return '';
+              return JSON.stringify({
+                x: Math.round(r.left + Math.min(40, r.width / 2)),
+                y: Math.round(r.top + r.height / 2)
+              });
+            })()`));
+            return s ? JSON.parse(s) : null;
+          };
+          await wait(250);
+
+          const cb = await boxOf('.cm-codeblock pre');
+          if (cb) {
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: cb.x, y: cb.y, button: 'left', clickCount: 1 });
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: cb.x, y: cb.y, button: 'left', clickCount: 1 });
+            await wait(500);
+          }
+          // 整块散成源码围栏行 = 光标真的进到块里了
+          const afterClick = JSON.parse(String(await js(`(()=>JSON.stringify({
+            blocks: document.querySelectorAll('.cm-codeblock').length,
+            fences: document.querySelectorAll('#editor-host .cm-fence').length
+          }))()`)));
+          blockClickOk = !!cb && afterClick.blocks === 0 && afterClick.fences >= 2;
+          console.log('SMOKE blockClick=' + (blockClickOk ? 'ok' : 'bad') + ' ' +
+            JSON.stringify(afterClick));
+
+          // 鼠标挪到左栏，确保待办行没被 hover（hover 时才该接事件）
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: 12, y: 300 });
+          await wait(250);
+          const pe = String(await js(`(()=>{
+            const el = document.querySelector('.cm-todonote-add');
+            return el ? getComputedStyle(el).pointerEvents : 'none';
+          })()`));
+          plusHitOk = pe === 'none';
+          console.log('SMOKE plusHit=' + (plusHitOk ? 'ok' : 'bad') + ' pointerEvents=' + pe);
+        } catch (err) {
+          console.log('SMOKE blockClickFailed=' + err.message);
+        }
+
         // ① 代码块：整块渲染 + 语法高亮 + 代码里的表格不能被认成表格
         try {
           await js("document.querySelector('.row[data-clear]').click()");
@@ -2224,7 +2328,9 @@ function runSmoke() {
           console.log('SMOKE codeShot=' + (await saveShot('code-block.png')));
           win.hide();
 
-          // 单击代码块 → 什么都不该发生（以前一碰就散成源码，滚一下都得小心翼翼）
+          // 单击代码块 → 光标进到块里，块散成源码（围栏行出现）。
+          // 第 53 轮改的：以前单击什么都不做、只认双击，用户反馈「这几行点不进去」——
+          // 双击这个约定没人猜得到
           const pt = await js(`(()=>{
             const w = document.querySelector('.cm-codeblock');
             if (!w) return null;
@@ -2235,15 +2341,8 @@ function runSmoke() {
           const clickState = await js("document.querySelectorAll('.cm-codeblock').length + '/' +"
             + " document.querySelectorAll('#editor-host .cm-fence').length");
           console.log('SMOKE codeClick=' + clickState);
-
-          // 双击才退回源码
-          await wait(300);
-          await dblAt(pt);
-          const srcState = await js("document.querySelectorAll('.cm-codeblock').length + '/' +"
-            + " document.querySelectorAll('#editor-host .cm-fence').length");
-          console.log('SMOKE codeEdit=' + srcState);
-          // 单击后原样（两个块、没有围栏）；双击后少一个块、围栏行出现两行
-          codeOk = codeOk && clickState === '2/0' && String(srcState) === '1/2';
+          // 少一个块、围栏行出现两行 = 光标真的进去了
+          codeOk = codeOk && String(clickState) === '1/2';
         } catch (err) {
           console.log('SMOKE codeFailed=' + err.message);
         }
@@ -2939,9 +3038,21 @@ function runSmoke() {
           hlOk = !!hl && hl.text === '重点' && !hl.line.includes('==')
             && !!hl.bg && hl.bg !== 'rgba(0, 0, 0, 0)' && hl.bg !== 'transparent';
 
-          // (d2) 高亮可选颜色：设置面板换色 + 快捷栏右键色板，两条路都得真的改到 --mark。
+          // (d2) 默认笔：设置面板换色，没写色号的 `==重点==` 跟着变。
           // 只认 computed backgroundColor，不认 data-hl 属性 —— 属性写上了但 CSS 没跟上，
           // 对用户来说就是「点了没反应」
+          const keyOf = k => js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            if (!c) return 'nocontent';
+            const code = { ArrowUp: 38, ArrowDown: 40 };
+            c.dispatchEvent(new KeyboardEvent('keydown', {
+              key: ${JSON.stringify(k)}, code: ${JSON.stringify(k)},
+              keyCode: code[${JSON.stringify(k)}], which: code[${JSON.stringify(k)}],
+              bubbles: true, cancelable: true
+            }));
+            return 'ok';
+          })()`);
+
           try {
             const setColor = JSON.parse(String(await js(`(() => {
               const b = document.querySelector('#seg-hl span[data-v="green"]');
@@ -2957,6 +3068,63 @@ function runSmoke() {
             hlColorOk = setColor.attr === 'green' && setColor.bg === 'rgb(207, 230, 189)';
             console.log('SMOKE hlColor=' + (hlColorOk ? 'ok' : 'bad') + ' ' + JSON.stringify(setColor));
 
+            // (d3) 逐处上色：同一行里两处，各自是自己的底色。
+            // 光标先离开这一行 —— 光标所在行会露出源码，什么都量不到
+            await typeText('\n==甲=={green}==乙=={pink}');
+            await wait(350);
+            await keyOf('ArrowUp');
+            await wait(500);
+            const two = JSON.parse(String(await js(`(() => {
+              const els = [...document.querySelectorAll('#editor-host .cm-hl')];
+              const pick = t => {
+                const e = els.find(x => x.textContent === t);
+                return e ? { cls: e.className, bg: getComputedStyle(e).backgroundColor } : null;
+              };
+              const line = (els[0] && els[0].closest('.cm-line')) || null;
+              return JSON.stringify({
+                a: pick('甲'), b: pick('乙'),
+                // 这一行渲染出来应该就是「甲乙」两个色带，标记和色号都被藏掉
+                line: line ? line.textContent : ''
+              });
+            })()`)));
+            hlEachOk = !!two.a && !!two.b
+              && two.a.cls.includes('cm-hl-green') && two.a.bg === 'rgb(207, 230, 189)'
+              && two.b.cls.includes('cm-hl-pink') && two.b.bg === 'rgb(251, 213, 224)'
+              && two.a.bg !== two.b.bg
+              && two.line === '甲乙';
+            console.log('SMOKE hlEach=' + (hlEachOk ? 'ok' : 'bad') + ' ' +
+              JSON.stringify({ a: two.a, b: two.b, line: two.line }));
+
+            // (d4) 快捷栏右键色板：给「这一处」换颜色，而不是改全局默认笔。
+            // 走真实路径 —— 先点一下那处高亮把光标放进去（人就是这么做的），
+            // 再右键选紫色，最后确认正文里只改了色号、没有新插一对 `==`
+            const tapEl = async (expr) => {
+              const raw = String(await js(`(()=>{
+                const e = document.querySelector(${JSON.stringify(expr)});
+                if (!e) return '';
+                const r = e.getBoundingClientRect();
+                return JSON.stringify({
+                  x: Math.round(r.left + r.width / 2),
+                  y: Math.round(r.top + r.height / 2)
+                });
+              })()`));
+              if (!raw) return false;
+              const p = JSON.parse(raw);
+              win.webContents.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 });
+              win.webContents.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 });
+              await wait(400);
+              return true;
+            };
+
+            const clicked = await tapEl('#editor-host .cm-hl-green');
+            // 光标进了这一行，行会露出源码，正好能读到原文
+            const rawLine = String(await js(`(()=>{
+              const s = getSelection();
+              const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+              const line = el && el.closest ? el.closest('.cm-line') : null;
+              return line ? line.textContent : '';
+            })()`));
+
             const dots = JSON.parse(String(await js(`(() => {
               const b = document.querySelector('[data-qb="hl"]');
               if (!b) return '{"dots":0}';
@@ -2970,21 +3138,38 @@ function runSmoke() {
             })()`)));
             await wait(150);
             const picked = JSON.parse(String(await js(`(() => {
-              const d = document.querySelector('.qb-pal .qb-dot[data-c="pink"]');
+              const d = document.querySelector('.qb-pal .qb-dot[data-c="purple"]');
               if (!d) return '{"err":"nodot"}';
               d.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-              const el = document.querySelector('#editor-host .cm-hl');
+              const s = getSelection();
+              const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+              const line = el && el.closest ? el.closest('.cm-line') : null;
               return JSON.stringify({
                 attr: document.documentElement.getAttribute('data-hl'),
-                bg: el ? getComputedStyle(el).backgroundColor : '',
-                pal: !!document.querySelector('.qb-pal')
+                pal: !!document.querySelector('.qb-pal'),
+                line: line ? line.textContent : ''
               });
             })()`)));
-            // 粉色 = #fbd5e0；色板要标出当前是哪支笔，选完自己收起来
-            hlPalOk = dots.dots === 6 && dots.on === 'green' && picked.attr === 'pink'
-              && picked.bg === 'rgb(251, 213, 224)' && picked.pal === false;
+            // 光标挪开这一行才会渲染成色带
+            await keyOf('ArrowUp');
+            await wait(500);
+            const purple = JSON.parse(String(await js(`(() => {
+              const e = document.querySelector('#editor-host .cm-hl-purple');
+              return JSON.stringify({ bg: e ? getComputedStyle(e).backgroundColor : '' });
+            })()`)));
+
+            hlPalOk = clicked && dots.dots === 6 && dots.on === 'green'
+              && rawLine.includes('==甲=={green}')
+              // 只改色号：`{green}` 没了、`{purple}` 来了，而且没有多出一对 `==`
+              && picked.line.includes('==甲=={purple}') && !picked.line.includes('{green}')
+              && (picked.line.match(/==/g) || []).length === (rawLine.match(/==/g) || []).length
+              && picked.attr === 'green' && picked.pal === false
+              && purple.bg === 'rgb(228, 216, 248)';
             console.log('SMOKE hlPal=' + (hlPalOk ? 'ok' : 'bad') +
-              ' dots=' + dots.dots + ' on=' + dots.on + ' ' + JSON.stringify(picked));
+              ' dots=' + dots.dots + ' on=' + dots.on +
+              ' raw=' + JSON.stringify(rawLine.slice(0, 40)) +
+              ' now=' + JSON.stringify(picked.line.slice(0, 40)) +
+              ' attr=' + picked.attr + ' bg=' + purple.bg);
           } catch (err) {
             console.log('SMOKE hlColorFailed=' + err.message);
           }
@@ -3078,14 +3263,16 @@ function runSmoke() {
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
-          && dragBarOk && qbCaretOk && qbSelOk && keepScrollOk;
+          && hlEachOk && blockClickOk && plusHitOk
+          && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
-          tabOk, imgCopyOk
+          hlEachOk, blockClickOk, plusHitOk,
+          tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {

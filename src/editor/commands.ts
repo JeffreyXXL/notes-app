@@ -10,7 +10,9 @@ import { EditorView } from '@codemirror/view';
 import type { EditorState } from '@codemirror/state';
 import { codeBlocksField } from './live-preview';
 import { store, noteById, resolveLink } from '../store';
+import { isHlColor } from '../settings';
 import { dirOf } from '../core/path';
+import type { HlColor } from '../types';
 
 /**
  * 改文档之前先把焦点还给正文。
@@ -71,6 +73,133 @@ export function toggleWrap(view: EditorView, before: string, after = before, hin
   }
 }
 
+/* ============================================================
+   高亮：逐处上色
+   ============================================================ */
+
+/** 一处高亮在文档里的位置 */
+interface HlHit {
+  /** 正文起点（`==` 之后） */
+  from: number;
+  /** 正文终点（收尾 `==` 之前） */
+  to: number;
+  color: HlColor;
+  /** 后面那个 `{色号}` 的长度，没有色号就是 0 */
+  sufLen: number;
+}
+
+/** 光标 / 选区所在的这一行里，包住它的那处高亮；不在任何高亮里返回 null */
+function hlAt(state: EditorState, pos: number): HlHit | null {
+  const line = state.doc.lineAt(pos);
+  const col = pos - line.from;
+  const re = /==([^=\s][^=\n]*?)==(?:\{([a-z]{3,8})\})?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line.text))) {
+    const a = m.index + 2;
+    const b = a + m[1].length;
+    const known = isHlColor(m[2]);
+    const sufLen = known ? m[2].length + 2 : 0;
+    const color: HlColor = isHlColor(m[2]) ? m[2] : store.settings.hlColor;
+    // 落在 `==` 的左侧边界上不算「在里面」—— 那更像是想在这一处前面新起一段
+    if (col > m.index && col <= b + 2 + sufLen) {
+      return { from: line.from + a, to: line.from + b, color, sufLen };
+    }
+  }
+  return null;
+}
+
+/**
+ * 套 / 改 / 取消高亮。
+ *
+ * 和 `toggleWrap` 分开写，是因为高亮现在带色号：`==文字=={green}`。
+ * 写成后缀而不是 `=={green}文字==`，是为了不动正文 —— 光标停在字里的时候，
+ * 后缀在行尾，看起来就是普通的高亮。
+ *
+ * 规则（先看「是不是已经在一处高亮里」，再看选区）：
+ * - 光标/选区整个落在某处高亮里、点了别的笔 → 只改那处的色号，正文一个字不动
+ * - 同上、点的还是同一支笔 → 整处取消（当开关用）
+ * - 选了字、外面没有高亮 → 包一层，需要时补色号
+ * - 只点了光标、也不在任何高亮里 → 插一对空的，光标停在「高亮」上直接改名
+ *
+ * 「光标停在高亮里」这条最要紧：想给已有的高亮换个颜色，人一定是先点进去
+ * 再选色。少了这条就会在旁边新插一对 `==`，把一处高亮劈成两处。
+ *
+ * 色号和默认笔一样时不写进正文，省得每处都挂一截 `{yellow}`。
+ */
+export function toggleHighlight(view: EditorView, color: HlColor): void {
+  ensureFocus(view);
+  const { state } = view;
+  const doc = state.doc;
+  const sel = state.selection.main;
+  const suffix = color === store.settings.hlColor ? '' : `{${color}}`;
+
+  // ① 已经在这一处高亮里：换色 / 取消
+  const hit = hlAt(state, sel.from);
+  if (hit && hit.to >= sel.to) {
+    if (hit.color === color) {
+      view.dispatch({
+        changes: [
+          { from: hit.from - 2, to: hit.from, insert: '' },
+          { from: hit.to, to: hit.to + 2 + hit.sufLen, insert: '' }
+        ],
+        selection: { anchor: hit.from - 2 }
+      });
+      return;
+    }
+    // 不设 selection，让 CodeMirror 自己把光标映射过去：色号长短变了也不会跑偏
+    view.dispatch({
+      changes: { from: hit.to + 2, to: hit.to + 2 + hit.sufLen, insert: suffix }
+    });
+    return;
+  }
+
+  // ② 只点了光标：插一对空的，光标框住占位词
+  if (sel.from === sel.to) {
+    const text = `==高亮==${suffix}`;
+    view.dispatch({
+      changes: { from: sel.from, insert: text },
+      selection: { anchor: sel.from + 2, head: sel.from + 4 }
+    });
+    return;
+  }
+
+  const { from, to } = sel;
+  const inner = doc.sliceString(from, to);
+
+  // ③ 选区把 `==…==` 整个框进来了：剥掉标记按新颜色重新包
+  if (inner.length > 4 && inner.startsWith('==') && inner.endsWith('==')) {
+    const body = inner.slice(2, -2);
+    view.dispatch({
+      changes: { from, to, insert: `==${body}==${suffix}` },
+      selection: { anchor: from + 2, head: from + 2 + body.length }
+    });
+    return;
+  }
+
+  // ④ 普通选区：包一层
+  view.dispatch({
+    changes: [
+      { from, insert: '==' },
+      { from: to, insert: `==${suffix}` }
+    ],
+    selection: { anchor: from + 2, head: to + 2 }
+  });
+}
+
+/** 用默认笔套高亮。快捷栏按钮和 Ctrl+Shift+H 都走这里 */
+export function highlightDefault(view: EditorView): void {
+  toggleHighlight(view, store.settings.hlColor);
+}
+
+/**
+ * 光标所在那处高亮用的是什么颜色；不在高亮里就返回默认笔。
+ * 只给色板标「当前是哪个」用，不参与渲染。
+ */
+export function hlColorAt(view: EditorView): HlColor {
+  const state = view.state;
+  return hlAt(state, state.selection.main.head)?.color ?? store.settings.hlColor;
+}
+
 /** 给选中的每一行加前缀；如果全都已经有了，就全部去掉。 */
 export function toggleLinePrefix(view: EditorView, prefix: string): void {
   ensureFocus(view);
@@ -84,12 +213,32 @@ export function toggleLinePrefix(view: EditorView, prefix: string): void {
 
   const allHave = lines.every(l => l.text.startsWith(prefix));
   const changes = [];
+  // 改完之后光标该落在哪：行尾。点「待办 / 列表 / 引用」就是想接着往下写，
+  // 光标留在原来的列上（甚至被前缀挤到行首之前）等于还要再按一次 End
+  let caret = -1;
   for (const line of lines) {
-    if (allHave) changes.push({ from: line.from, to: line.from + prefix.length, insert: '' });
-    else if (!line.text.startsWith(prefix)) changes.push({ from: line.from, insert: prefix });
+    if (allHave) {
+      changes.push({ from: line.from, to: line.from + prefix.length, insert: '' });
+      caret = line.to - prefix.length;
+    } else if (!line.text.startsWith(prefix)) {
+      changes.push({ from: line.from, insert: prefix });
+      caret = line.to + prefix.length;
+    } else {
+      caret = line.to;
+    }
   }
 
-  if (changes.length) view.dispatch({ changes });
+  // 本来就有前缀、什么都没改：光标也送到行尾
+  if (!changes.length) {
+    if (sel.empty) view.dispatch({ selection: { anchor: doc.lineAt(sel.to).to } });
+    return;
+  }
+
+  view.dispatch({
+    changes,
+    // 只动光标不选区的情况才接管光标；选了多行就保持选区，别把它折叠掉
+    selection: sel.empty && caret >= 0 ? { anchor: caret } : undefined
+  });
 }
 
 /** 标题级别循环：无 → ## → ### → 无 */
@@ -106,9 +255,12 @@ export function cycleHeading(view: EditorView): void {
   else if (m[1].length === 3) next = '';
   else next = '## ';
 
+  // 光标落到行尾：点标题按钮是想把这一行变成标题后接着写，
+  // 停在 `## ` 后面反而把原来的位置丢了
+  const bodyLen = line.text.length - (m ? m[0].length : 0);
   view.dispatch({
     changes: { from: line.from, to: line.from + (m ? m[0].length : 0), insert: next },
-    selection: { anchor: line.from + next.length }
+    selection: { anchor: line.from + next.length + bodyLen }
   });
 }
 

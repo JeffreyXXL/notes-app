@@ -134,8 +134,17 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 .cm-strike{text-decoration:line-through;color:var(--t4)}
 /* `==高亮==`：整块淡色底，像马克笔划过去。
    斜体那条也是淡色底，所以这里用另一个色相（--mark），两者一眼能分开 */
-.cm-hl{background:var(--mark);border-radius:3px;padding:1px 2px;
-  box-shadow:0 0 0 1px var(--mark);color:var(--t1)}
+/* 高亮。底色走 --hl-bg 这个局部变量：没写色号就用默认笔（--mark），
+   写了色号就由下面六条换成那支笔。色带的外描边也跟着一起换，
+   否则换色之后会留一圈旧颜色的边 */
+.cm-hl{--hl-bg:var(--mark);background:var(--hl-bg);border-radius:3px;padding:1px 2px;
+  box-shadow:0 0 0 1px var(--hl-bg);color:var(--t1)}
+.cm-hl-yellow{--hl-bg:var(--mark-yellow)}
+.cm-hl-green{--hl-bg:var(--mark-green)}
+.cm-hl-blue{--hl-bg:var(--mark-blue)}
+.cm-hl-pink{--hl-bg:var(--mark-pink)}
+.cm-hl-purple{--hl-bg:var(--mark-purple)}
+.cm-hl-orange{--hl-bg:var(--mark-orange)}
 .cm-bullet{color:var(--t4);padding-right:8px;font-size:15px}
 .cm-hit{background:var(--hl-hit);border-radius:2px;box-shadow:0 0 0 1px var(--hl-hit)}
 .cm-olnum{color:var(--t4)}
@@ -145,12 +154,16 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 /* 待办的「解决方式」：箭头 + 一段淡色的说明，可以带 [[链接]] */
 .cm-todo-arrow{color:var(--accent);opacity:.55;padding:0 2px}
 .cm-todo-note{color:var(--t3);font-size:.94em}
-/* 还没写解决方式时行尾那个小「＋」，平时隐形，鼠标移到这一行才出现 */
+/* 还没写解决方式时行尾那个小「＋」，平时隐形，鼠标移到这一行才出现。
+   光 opacity:0 是不够的 —— 透明元素照样接收点击，行尾那 22px 就成了死区，
+   点下去会插一个「→」而不是把光标放到行尾。所以一并关掉命中测试，
+   只在真的显形时才接事件 */
 .cm-todonote-add{display:inline-block;width:16px;height:16px;line-height:15px;margin-left:6px;
   border-radius:5px;border:1px dashed var(--border);background:transparent;color:var(--t5);
   font-family:var(--font-ui);font-size:11px;text-align:center;cursor:pointer;opacity:0;
+  pointer-events:none;
   transition:opacity .12s,color .12s,border-color .12s;vertical-align:1px;padding:0}
-#editor-host .cm-line:hover .cm-todonote-add{opacity:1}
+#editor-host .cm-line:hover .cm-todonote-add{opacity:1;pointer-events:auto}
 .cm-todonote-add:hover{color:var(--t2);border-color:var(--t4);background:var(--hover-soft)}
 
 /* ============================================================

@@ -2,8 +2,13 @@
  * 把正文里的图片复制到系统剪贴板。
  *
  * 优先走主进程：那里能直接读原文件，不受页面 CORS 限制，也能保住原始字节。
- * 只有浏览器模式（`npm run dev`）才退到 canvas —— 那种模式下图片本来就是
- * localStorage 里的 data URL，画布不会被污染。
+ * 主进程解不了的格式（nativeImage 不支持 SVG）就在画布里栅格化成 PNG，
+ * 再把 PNG 交回主进程写剪贴板。
+ *
+ * 为什么不让渲染进程自己调 `navigator.clipboard.write` 写：窗口不在前台时
+ * 这个调用会**返回成功但什么都没写**，用户看到「已复制图片」却粘不出东西，
+ * 比直接报错更糟。Electron 的 clipboard 没这个问题，所以统一走它。
+ * 浏览器模式（`npm run dev`）没有这座桥，才退到 navigator。
  */
 
 import { invoke, hasDesktopBridge } from '../storage/ipc';
@@ -23,8 +28,24 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-/** 浏览器兜底：画到 canvas 转 PNG 再塞进剪贴板 */
-async function copyViaCanvas(url: string): Promise<boolean> {
+/** 画到 canvas 再导出成 PNG data URL；外链图没带 CORS 头会被污染，这时返回空串 */
+async function rasterize(url: string): Promise<string> {
+  try {
+    const img = await loadImage(url);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.drawImage(img, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return '';
+  }
+}
+
+/** 浏览器兜底：直接往 navigator 的剪贴板里塞 PNG */
+async function copyViaNavigator(url: string): Promise<boolean> {
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
   try {
     const img = await loadImage(url);
@@ -39,7 +60,6 @@ async function copyViaCanvas(url: string): Promise<boolean> {
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     return true;
   } catch {
-    // 外链图没带 CORS 头时画布会被污染，toBlob 抛安全错误
     return false;
   }
 }
@@ -62,12 +82,19 @@ export async function copyImageToClipboard(src: string, base = ''): Promise<void
         toast('已复制图片');
         return;
       }
+      // 走到这里说明 nativeImage 解不了（SVG）。栅格化成 PNG 再交给主进程，
+      // 写进去的是位图，粘到微信 / Word 里照样能显示
+      const png = await rasterize(url);
+      if (png && await invoke<boolean>('clipboard_image', { src: png, base: '' })) {
+        toast('已复制图片');
+        return;
+      }
     } catch (err) {
       console.error('[notes-app] 复制图片失败', err);
     }
+    toast('这张图复制不了');
+    return;
   }
 
-  // 主进程解不了的格式（nativeImage 不支持 SVG）退到画布。
-  // 这条同时也是浏览器模式下的唯一路径。
-  toast(await copyViaCanvas(url) ? '已复制图片' : '这张图复制不了');
+  toast(await copyViaNavigator(url) ? '已复制图片' : '这张图复制不了');
 }

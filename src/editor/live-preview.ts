@@ -4,6 +4,7 @@ import { StateEffect, StateField } from '@codemirror/state';
 import type { EditorState, Range } from '@codemirror/state';
 import { esc } from '../core/text';
 import { assetUrl } from '../core/image';
+import { isHlColor } from '../settings';
 import { highlight, langOf } from './highlight';
 import { copyImageToClipboard } from './image-copy';
 
@@ -191,26 +192,45 @@ function clickToEdit(el: HTMLElement, view: EditorView, pos: number): void {
 }
 
 /**
- * 双击才进源码 —— 和图片一致。
+ * 单击（而不是拖选）就把光标放进块里，块随即变回源码。
  *
- * 早先代码块是单击就跳回源码：想滚一下、想挑个词复制、或者只是点偏了，
- * 整块「啪」地散成一堆围栏，还得再点回去。所以单击改成什么都不做。
+ * 以前这里是「双击才进源码」：想滚一下、想挑个词复制、或者只是点偏了，
+ * 整块「啪」地散成一堆围栏，还得再点回去。结果矫枉过正 —— 单击完全没反应，
+ * 看起来就是「这几行点不进去、光标也进不去」，双击这个约定根本没人猜得到。
+ * 现在回到单击进入，但仍然保留「拖过就不算单击」：想在渲染态里拖选一段代码复制，
+ * 不会因为手一抖就把块打散。
  *
- * 关键在 mousedown 上：CodeMirror 自己的 mousedown 挂在 contentDOM 上，
+ * 关键在 mousedown：CodeMirror 自己的 mousedown 挂在 contentDOM 上，
  * 不拦住它，光标会先被塞进块里 —— 而「光标在块内」正是露出源码的条件，
- * 拦得再晚也没用（图片那边踩的是同一个坑）。
+ * 拦得再晚也没用（图片那边踩的是同一个坑）。这里只 stopPropagation 不
+ * preventDefault，原生拖选还能用。
  */
-function dblClickToEdit(el: HTMLElement, view: EditorView, pos: number): void {
+function clickToEnter(el: HTMLElement, view: EditorView, pos: number): void {
   // 头部的「复制」按钮自己处理事件，别在这儿被吃掉
   const onChrome = (t: EventTarget | null): boolean =>
     !!(t as HTMLElement | null)?.closest?.('.cb-copy');
 
+  let down: { x: number; y: number } | null = null;
+
   el.addEventListener('mousedown', e => {
     if (onChrome(e.target)) return;
-    e.preventDefault();
     e.stopPropagation();
+    down = { x: e.clientX, y: e.clientY };
   });
 
+  el.addEventListener('mouseup', e => {
+    if (onChrome(e.target)) return;
+    const from = down;
+    down = null;
+    if (!from) return;
+    if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) > 4) return;
+    e.preventDefault();
+    e.stopPropagation();
+    view.dispatch({ selection: { anchor: Math.min(pos, view.state.doc.length) } });
+    view.focus();
+  });
+
+  // 双击也认，老习惯别打破
   el.addEventListener('dblclick', e => {
     if (onChrome(e.target)) return;
     e.preventDefault();
@@ -428,14 +448,14 @@ class CodeWidget extends WidgetType {
 
     const pre = document.createElement('pre');
     // 单击不动它，得让人知道怎么进去（只挂在代码区，别盖到「复制」按钮上）
-    pre.title = '双击编辑';
+    pre.title = '点击编辑';
     const code = document.createElement('code');
     code.className = 'cb-code';
     code.innerHTML = highlight(this.code, this.lang);
     pre.appendChild(code);
     wrap.appendChild(pre);
 
-    dblClickToEdit(wrap, view, this.pos);
+    clickToEnter(wrap, view, this.pos);
     return wrap;
   }
 
@@ -1033,16 +1053,20 @@ const RULES: Rule[] = [
       mark(t0, t1, 'cm-code');
     }
   },
-  // `==高亮==`。开头不许是空白，免得把 `a == b == c` 这种比较式当成高亮；
-  // 正文里 `=` 不能出现在内容中间，所以中间也排除掉
+  // `==高亮==`，可以带一个色号 `==高亮=={green}`。开头不许是空白，免得把
+  // `a == b == c` 这种比较式当成高亮；正文里 `=` 不能出现在内容中间，所以中间也排除掉。
+  // 色号认不出来就只当普通的 `==高亮==`，那对大括号留在原地当正文 —— 宁可难看，
+  // 也不能把用户手写的 `{...}` 悄悄吃掉
   {
-    re: /==([^=\s][^=\n]*?)==/g,
+    re: /==([^=\s][^=\n]*?)==(?:\{([a-z]{3,8})\})?/g,
     apply(m, { mark, cut }) {
       const t0 = m.index + 2;
       const t1 = t0 + m[1].length;
+      const color = isHlColor(m[2]) ? m[2] : '';
       cut(m.index, t0);
-      cut(t1, m.index + m[0].length);
-      mark(t0, t1, 'cm-hl');
+      // 收尾的 `==` 后面紧跟色号时一起藏掉，否则会露出一截 `{green}`
+      cut(t1, t1 + 2 + (color ? m[2].length + 2 : 0));
+      mark(t0, t1, color ? `cm-hl cm-hl-${color}` : 'cm-hl');
     }
   },
   {

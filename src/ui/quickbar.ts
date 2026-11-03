@@ -7,12 +7,11 @@
 
 import type { EditorView } from '@codemirror/view';
 import {
-  toggleWrap, toggleLinePrefix, cycleHeading, insertBlock, insertLink, insertWikiLink,
-  TABLE_TEMPLATE
+  toggleWrap, toggleHighlight, highlightDefault, toggleLinePrefix, cycleHeading, insertBlock, insertLink,
+  insertWikiLink, hlColorAt, TABLE_TEMPLATE
 } from '../editor/commands';
 import { pickImages } from '../editor/image-insert';
 import { HL_COLORS } from '../settings';
-import { store, saveSettings } from '../store';
 import type { HlColor } from '../types';
 
 interface Cmd {
@@ -50,9 +49,9 @@ const CMDS: (Cmd | null)[] = [
   {
     id: 'hl',
     title: '高亮  Ctrl+Shift+H（右键换颜色）',
-    // 中间那条色带直接用 --mark 上色，所以换笔之后图标跟着变，一眼能看出当前颜色
+    // 中间那条色带直接用 --mark 上色，所以换笔之后图标跟着变，一眼能看出默认颜色
     icon: svg(`<rect x="2.6" y="6.2" width="10.8" height="3.6" rx="1.2" fill="var(--mark)" stroke="currentColor" stroke-opacity=".4"/><path d="M4.6 4.4h6.8M4.6 12.2h4.4" ${stroke}/>`),
-    run: v => toggleWrap(v, '==', '==', '高亮')
+    run: highlightDefault
   },
   {
     id: 'code',
@@ -151,16 +150,14 @@ function onOutsideDown(e: MouseEvent): void {
 }
 
 /**
- * 换一支马克笔。
+ * 色板里的圆点。
  *
- * 高亮色只是 <html> 上的一个属性，正文颜色全由 CSS 变量接管，
- * 所以不用重建编辑器 —— 正在编辑的笔记不会闪，光标和滚动位置也都还在。
- * 和 theme.ts 的 applySettings 里那一行是同一个约定。
+ * 语义从第 53 轮起变了：以前是「换一支全局的笔」，现在是「给这一处上这个颜色」。
+ * 逐处上色之后，选一次颜色就顺手改全局默认会很别扭 —— 在 A 处点了蓝色，
+ * 回头在 B 处点按钮还是黄的就说不通了。全局默认笔留给设置面板。
  */
-function useHlColor(color: HlColor): void {
-  store.settings.hlColor = color;
-  saveSettings();
-  document.documentElement.setAttribute('data-hl', color);
+function applyHlColor(view: EditorView, color: HlColor): void {
+  toggleHighlight(view, color);
 }
 
 export function bindQuickbar(view: EditorView): void {
@@ -195,10 +192,12 @@ export function bindQuickbar(view: EditorView): void {
 
     if (palette) { closePalette(); return; }
 
+    // 圈出「这一处现在是什么颜色」，没有高亮就圈默认笔
+    const now = hlColorAt(view);
     const pal = document.createElement('div');
     pal.className = 'qb-pal';
     pal.innerHTML = HL_COLORS.map(c =>
-      `<button class="qb-dot${store.settings.hlColor === c.id ? ' on' : ''}" data-c="${c.id}"` +
+      `<button class="qb-dot${now === c.id ? ' on' : ''}" data-c="${c.id}"` +
       ` title="${c.name}" aria-label="${c.name}"></button>`
     ).join('');
     // 挂在按钮正上方：.quickbar 自己是绝对定位，正好当包含块
@@ -209,16 +208,13 @@ export function bindQuickbar(view: EditorView): void {
   });
 
   bar.addEventListener('click', e => {
-    // 色板里的圆点：换笔；如果本来选着一段字，顺手就套上高亮
+    // 色板里的圆点：给选中的这一段上这个颜色（只点光标就插一对新的）
     const dot = (e.target as HTMLElement).closest('[data-c]') as HTMLElement | null;
     if (dot) {
-      const sel = saved ?? view.state.selection.main;
-      const picked = sel.anchor !== sel.head;
-      useHlColor(dot.dataset.c as HlColor);
       closePalette();
       if (saved) view.dispatch({ selection: saved });
       saved = null;
-      if (picked) toggleWrap(view, '==', '==', '高亮');
+      applyHlColor(view, dot.dataset.c as HlColor);
       return;
     }
 

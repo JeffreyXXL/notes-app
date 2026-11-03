@@ -95,12 +95,12 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + click does nothing + double-click into source → click an internal link → todo resolutions → switch the highlight colour (settings panel + right-click palette) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo resolutions → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
 | `scheme-{cream,graphite,paper}-{light,dark}.png` | One per color scheme × light/dark |
-| `settings-appearance.png` | Settings: name / scheme / light-dark / highlight / security |
+| `settings-appearance.png` | Settings: name / scheme / light-dark / default highlight / security |
 | `meta-tags.png` | Tag multi-select in the "organize" sheet |
 | `left-rename.png` | Inline rename field in the left pane |
 | `desktop-image.png` | Image in the body (full window) |
@@ -134,16 +134,20 @@ A few assertions worth keeping:
 | `preview=cards4 blank0 thumbs1` | Card previews: no blank cards, at least one thumbnail |
 | `crlf="这一行是正文…"` | Excerpts can be extracted from CRLF files too (this one guards a real bug) |
 | `imgEdit=0/1` | Only a **double-click** on an image reverts to the source line |
-| `imgCopy=ok clip=600x220` | After clicking 复制 in the toolbar, the system clipboard really holds a 600×220 image (read back with Electron's `clipboard.readImage()`) |
+| `imgCopy=ok clip=600x220` | After clicking 复制 in the toolbar, the system clipboard really holds a 600×220 image (read back with Electron's `clipboard.readImage()`). Where the clipboard is unreachable (sandbox / non-interactive session) an extra `clipUnavailable` is printed and only the app-side success is checked |
 | `imgPasteFile=… size=70` | A pasted image really lands on disk |
 | `tagTints=8/8` / `grip=open1 close0` | Tag colors don't collide / `···` opens and closes on click |
 | `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | Both code blocks render, the language label is right, keywords / strings / comments / function names are colored; **a table inside a code block is not treated as a table** |
-| `codeClick=2/0` | **A single click on a code block does nothing**: both blocks remain, zero fence lines exposed |
-| `codeEdit=1/2` | Double-click reverts to source (one block fewer, two fence lines more) |
+| `codeClick=1/2` | **A single click drops the cursor into the code block** (one block fewer, two fence lines more). It used to do nothing at all, which users reported as "these lines can't be clicked" |
+| `blockClick=ok {"blocks":0,"fences":2}` | Same thing, verified independently on another note |
 | `link={"wiki":2,"note":1,"add":1}` | Two internal links / one todo resolution / one `＋` button |
 | `linkJump="图片测试"` | Clicking `[[图片测试]]` really navigates there (verified via the selected card in the middle pane) |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
+| `hlEach=ok {"a":{"cls":"cm-hl cm-hl-green",…},"b":{"cls":"cm-hl cm-hl-pink",…}}` | **Two highlights on one line, each with its own colour** — and the line renders as just 甲乙, markers and colour ids hidden |
+| `hlPal=ok on=green raw="==甲=={green}==乙=={pink}" now="==甲=={purple}==乙=={pink}"` | Right-click recolour of an existing highlight: **only the colour id changes**, the number of `==` is identical (one highlight never gets split into two) |
+| `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
+| `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
 | `titleRename title="代Z码块测试" hasZ=true oldGone=true` | Changing the H1 really renames the file; the old name is gone |
 | `placeholderRename old=false new=true` | On startup `占位符/无标题.md` becomes `占位符改名测试.md` from its heading |
@@ -172,11 +176,15 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 **Writing notes**
 - The `新建笔记` (New note) button at the top right of the middle pane — or `Ctrl/Cmd + N` — starts a note. The title is the first `# Heading` line of the body.
 - Typing `# `, `- `, `- [ ] `, `> `, `**bold**`, `` `code` `` immediately renders into the corresponding style.
-- `==highlight==` gives a soft marker-pen band behind the text. **The colour is yours to pick**: Settings →
-  Appearance → Highlight offers six pens (yellow / green / blue / pink / purple / orange), all working across the three
-  schemes in both light and dark — or right-click the highlighter button in the quick bar to switch on the spot.
-  It deliberately uses a different hue from the italic band and from the yellow search hit, so the three don't get
-  confused. `Ctrl/Cmd + Shift + H` or the highlighter button in the quick bar wraps the selection.
+- `==highlight==` gives a soft marker-pen band behind the text. It deliberately uses a different hue from the italic
+  band and from the yellow search hit, so the three don't get confused. `Ctrl/Cmd + Shift + H` or the highlighter
+  button in the quick bar wraps the selection.
+- **Every highlight can have its own colour.** With text selected, right-click the highlighter button in the quick bar
+  and six pens pop up (yellow / green / blue / pink / purple / orange); pick one and that spot gets it. Put the cursor
+  inside an existing highlight and pick a different pen to recolour it in place — not a single character of the text
+  changes. The colour is written after the markers as `==重点=={green}`; when it matches the default pen it's left
+  out, so most highlights stay a plain `==重点==`. The default pen lives in Settings → Appearance → Highlight and is
+  what the button and the shortcut use.
 - When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
 - **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
   Enter starts the next line with the same marker: ordered lists increment, new todos always start unchecked, indentation
@@ -190,7 +198,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 
 **Bottom quick bar**
 - A floating toolbar sits at the bottom of the editor so you don't have to remember syntax. It floats over the text rather than taking up layout space (the body already leaves room at the bottom).
-- The left group is inline formatting: bold / italic / strikethrough / highlight (right-click to change its colour) / inline code / link.
+- The left group is inline formatting: bold / italic / strikethrough / highlight (right-click to colour this spot) / inline code / link.
 - The right group is block elements: image / heading / list / todo / quote / table / divider.
 - With a selection, the format wraps the selection; clicking the same button again removes it. With no selection, it inserts a pair of markers and puts the cursor in between.
 - The heading button cycles: body → `##` → `###` → body.

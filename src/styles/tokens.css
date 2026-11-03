@@ -413,21 +413,28 @@ html[data-font="clean"]{--font-ui:"Inter","PingFang SC","Microsoft YaHei","Noto 
 
 /* ============================================================
    高亮颜色（`==文字==` 的马克笔）
-   只覆盖 --mark 一个变量，所以放在最后：
-   它和 data-scheme / data-theme 是三个正交维度，六套配色都能换笔。
+   六支笔各自的底色先定成独立变量，正文里逐处上色（`==字=={green}`）
+   直接吃这几个值；`--mark` 只是「默认那支笔」，给没写色号的旧笔记兜底。
    亮色用淡底 + 深字，暗色用沉底 + 亮字，两边都保住正文可读性。
-   暗色那条多带一个 [data-theme="dark"]，特异性压过上面所有色系定义。
    ============================================================ */
-html[data-hl="yellow"]{--mark:#ffe9a3}
-html[data-hl="green"]{--mark:#cfe6bd}
-html[data-hl="blue"]{--mark:#d3e2f8}
-html[data-hl="pink"]{--mark:#fbd5e0}
-html[data-hl="purple"]{--mark:#e4d8f8}
-html[data-hl="orange"]{--mark:#ffdcb5}
+html{--mark-yellow:#ffe9a3;--mark-green:#cfe6bd;--mark-blue:#d3e2f8;
+  --mark-pink:#fbd5e0;--mark-purple:#e4d8f8;--mark-orange:#ffdcb5}
 
-html[data-hl="yellow"][data-theme="dark"]{--mark:#5b4a17}
-html[data-hl="green"][data-theme="dark"]{--mark:#3e4f2d}
-html[data-hl="blue"][data-theme="dark"]{--mark:#24384f}
-html[data-hl="pink"][data-theme="dark"]{--mark:#4d2b36}
-html[data-hl="purple"][data-theme="dark"]{--mark:#3c3054}
-html[data-hl="orange"][data-theme="dark"]{--mark:#4f3418}
+html[data-theme="dark"]{--mark-yellow:#5b4a17;--mark-green:#3e4f2d;--mark-blue:#24384f;
+  --mark-pink:#4d2b36;--mark-purple:#3c3054;--mark-orange:#4f3418}
+
+/* 默认笔。放在色系定义之后，靠顺序压过上面的 --mark；
+   暗色那条多带一个 [data-theme="dark"]，特异性才够 */
+html[data-hl="yellow"]{--mark:var(--mark-yellow)}
+html[data-hl="green"]{--mark:var(--mark-green)}
+html[data-hl="blue"]{--mark:var(--mark-blue)}
+html[data-hl="pink"]{--mark:var(--mark-pink)}
+html[data-hl="purple"]{--mark:var(--mark-purple)}
+html[data-hl="orange"]{--mark:var(--mark-orange)}
+
+html[data-hl="yellow"][data-theme="dark"]{--mark:var(--mark-yellow)}
+html[data-hl="green"][data-theme="dark"]{--mark:var(--mark-green)}
+html[data-hl="blue"][data-theme="dark"]{--mark:var(--mark-blue)}
+html[data-hl="pink"][data-theme="dark"]{--mark:var(--mark-pink)}
+html[data-hl="purple"][data-theme="dark"]{--mark:var(--mark-purple)}
+html[data-hl="orange"][data-theme="dark"]{--mark:var(--mark-orange)}
