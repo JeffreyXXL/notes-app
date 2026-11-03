@@ -249,6 +249,73 @@ export function insertImage(
 }
 
 /* ============================================================
+   Tab / Shift-Tab 缩进
+   ============================================================ */
+
+/** 一个缩进单位。和 markdown 列表的常见写法一致，两个空格 */
+const INDENT_UNIT = '  ';
+
+/**
+ * Tab 缩进、Shift-Tab 反缩进。
+ *
+ * 为什么不用 @codemirror/commands 的 `indentWithTab`：它转手给 `indentMore`，
+ * 而 `indentMore` 的缩进量取自 `indentUnit` facet。这个应用没装任何语言包，
+ * 也没人提供这个 facet —— 取到的是空串，于是「Tab 被吃掉了但一个字都没插入」，
+ * 表现就是用户说的「Tab 不能用」。自己算更可控。
+ *
+ * 没选区时在光标处插/删一个单位；有选区就整段加减（和大多数编辑器一致）。
+ * 返回 true 表示这次按键归我们管，别让焦点跑出去。
+ */
+export function indentBlock(view: EditorView, dir: 1 | -1): boolean {
+  ensureFocus(view);
+  const { state } = view;
+  const sel = state.selection.main;
+
+  if (sel.empty) {
+    if (dir > 0) {
+      view.dispatch({
+        changes: { from: sel.from, insert: INDENT_UNIT },
+        selection: { anchor: sel.from + INDENT_UNIT.length },
+        userEvent: 'input'
+      });
+      return true;
+    }
+    // 反缩进：只吃行首已有的空白，不会把光标前的正文吃掉
+    const line = state.doc.lineAt(sel.from);
+    const head = /^[ \t]+/.exec(line.text);
+    if (!head) return true;
+    const cut = Math.min(head[0].length, INDENT_UNIT.length);
+    view.dispatch({
+      changes: { from: line.from, to: line.from + cut, insert: '' },
+      selection: { anchor: Math.max(line.from, sel.from - cut) },
+      userEvent: 'delete'
+    });
+    return true;
+  }
+
+  const first = state.doc.lineAt(sel.from).number;
+  const last = state.doc.lineAt(sel.to).number;
+  const changes = [];
+  for (let i = first; i <= last; i++) {
+    const line = state.doc.line(i);
+    if (dir > 0) {
+      changes.push({ from: line.from, insert: INDENT_UNIT });
+    } else {
+      const head = /^[ \t]+/.exec(line.text);
+      if (head) {
+        changes.push({
+          from: line.from,
+          to: line.from + Math.min(head[0].length, INDENT_UNIT.length),
+          insert: ''
+        });
+      }
+    }
+  }
+  if (changes.length) view.dispatch({ changes, userEvent: dir > 0 ? 'input.indent' : 'delete.dedent' });
+  return true;
+}
+
+/* ============================================================
    回车续格式
    ============================================================ */
 

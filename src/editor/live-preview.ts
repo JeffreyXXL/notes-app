@@ -5,6 +5,7 @@ import type { EditorState, Range } from '@codemirror/state';
 import { esc } from '../core/text';
 import { assetUrl } from '../core/image';
 import { highlight, langOf } from './highlight';
+import { copyImageToClipboard } from './image-copy';
 
 /* ============================================================
    状态字段：光标行是否露出 Markdown 源码 / 当前搜索词
@@ -734,6 +735,8 @@ class ImageWidget extends WidgetType {
     sep.className = 'img-sep';
     bar.appendChild(sep);
 
+    bar.appendChild(this.toolButton('复制', false,
+      () => { void copyImageToClipboard(this.src, this.base); }));
     bar.appendChild(this.toolButton('编辑', false, () => this.edit(view)));
     frame.appendChild(bar);
 
@@ -890,6 +893,27 @@ export const imageSelectPlugin = ViewPlugin.fromClass(
     destroy(): void { window.removeEventListener('mousedown', this.off, true); }
   }
 );
+
+/**
+ * Ctrl+C：选中图片时复制图片本身，否则放行给浏览器复制文字。
+ *
+ * 返回 false 很关键 —— 那样按键继续落到浏览器默认的 copy 上，
+ * 「选中一段字按 Ctrl+C」不会突然变成复制图片。
+ */
+export function copySelectedImage(view: EditorView): boolean {
+  const pos = view.state.field(selectedImageField);
+  if (pos < 0) return false;
+  // 有文字选区时优先复制文字，别抢
+  if (!view.state.selection.main.empty) return false;
+
+  const doc = view.state.doc;
+  const line = doc.lineAt(Math.min(pos, doc.length));
+  const block = view.state.field(imageBlocksField).find(b => b.s === line.number);
+  if (!block) return false;
+
+  void copyImageToClipboard(block.src, view.state.field(imageBaseField));
+  return true;
+}
 
 /* ============================================================
    笔记链接：点一下跳到那篇笔记

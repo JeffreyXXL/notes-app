@@ -1,6 +1,11 @@
 import { followLink } from '../store';
 import { openExternal } from '../core/open';
+import { toast } from '../core/toast';
 import type { LinkKind } from '../editor/live-preview';
+
+// 以前 toast 就住在这个文件里，设置面板等处一直是 `from './links'` 引的，
+// 挪到 core 之后在这里转出去，免得再改一遍所有调用点
+export { toast };
 
 /**
  * 正文里点了链接。
@@ -21,20 +26,5 @@ export function openNoteLink(target: string, kind: LinkKind, fromFolder: string)
 
 /* ============================================================
    轻提示：点空的链接要给个反馈，不然像卡住了
+   （实现在 core/toast，这里只是转出去）
    ============================================================ */
-
-let toastTimer: number | null = null;
-
-export function toast(msg: string): void {
-  let el = document.getElementById('toast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'toast';
-    document.body.appendChild(el);
-  }
-  el.textContent = msg;
-  el.classList.add('show');
-
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => { el?.classList.remove('show'); }, 1800);
-}

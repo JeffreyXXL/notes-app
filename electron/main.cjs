@@ -1,5 +1,5 @@
 const {
-  app, BrowserWindow, ipcMain, Tray, Menu, shell, protocol, nativeImage, dialog, screen
+  app, BrowserWindow, ipcMain, Tray, Menu, shell, protocol, nativeImage, dialog, screen, clipboard
 } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -649,13 +649,69 @@ function registerProtocol() {
           headers: {
             'content-type': type,
             // 图片内容不会变（文件名带随机串），可以让页面放心缓存
-            'cache-control': 'public, max-age=31536000, immutable'
+            'cache-control': 'public, max-age=31536000, immutable',
+            // 复制图片时渲染层要把图画进 canvas 再塞剪贴板。没有这个头，
+            // vault:// 的图会污染画布，toBlob 直接抛安全错误 —— 主进程解不了的
+            // 格式（典型是 SVG）就没有第二条路了。这个协议只对本应用自己的页面开放
+            'access-control-allow-origin': '*'
           }
         });
       } catch { /* 换下一个候选 */ }
     }
     return new Response('not found', { status: 404 });
   });
+}
+
+/**
+ * 把正文里的一张图读成 nativeImage，用来放进系统剪贴板。
+ *
+ * 三种来源分别处理：
+ *  - `data:` —— 直接解，浏览器模式存下来的图就是这种
+ *  - `http(s):` —— 主进程 fetch，不受页面的 CORS 限制（外链图床）
+ *  - 其它 —— 当成库内相对路径，解析顺序和 vault:// 协议完全一致：
+ *    先「笔记目录 + 路径」，再「库根 + 路径」
+ *
+ * 不走渲染层的 canvas：vault:// 的响应没带 CORS 头，画到 canvas 会污染，
+ * toBlob 直接抛安全错误。主进程读原文件还能保住原始字节。
+ */
+async function imageForClipboard(src, base) {
+  const p = String(src || '').trim();
+  if (!p) return null;
+
+  if (/^data:/i.test(p)) {
+    try {
+      const img = nativeImage.createFromDataURL(p);
+      return img.isEmpty() ? null : img;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^https?:/i.test(p)) {
+    try {
+      const r = await fetch(p);
+      if (!r.ok) return null;
+      const img = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
+      return img.isEmpty() ? null : img;
+    } catch {
+      return null;
+    }
+  }
+
+  const rel = p.replace(/^\.\//, '').replace(/^\/+/, '');
+  const dir = String(base || '').replace(/^\/+|\/+$/g, '');
+  const candidates = dir ? [`${dir}/${rel}`, rel] : [rel];
+
+  for (const c of candidates) {
+    try {
+      const file = vault.safeJoin(root(), c);
+      if (!IMAGE_MIME.has(mimeOf(file))) continue;
+      if (!fs.existsSync(file)) continue;
+      const img = nativeImage.createFromPath(file);
+      if (!img.isEmpty()) return img;
+    } catch { /* 越权路径或读失败，换下一个候选 */ }
+  }
+  return null;
 }
 
 /* ============================================================
@@ -688,6 +744,14 @@ function registerIpc() {
     vault.writeBinary(root(), rel_path, base64));
 
   ipcMain.handle('asset_exists', (_e, { rel_path }) => vault.exists(root(), rel_path));
+
+  // 复制图片到系统剪贴板：选中图片后按 Ctrl+C 或点工具条上的「复制」
+  ipcMain.handle('clipboard_image', async (_e, { src, base }) => {
+    const img = await imageForClipboard(src, base);
+    if (!img) return false;
+    clipboard.writeImage(img);
+    return true;
+  });
 
   ipcMain.handle('settings_load', () => {
     try { return fs.readFileSync(settingsFile(), 'utf8'); } catch { return null; }
@@ -1023,6 +1087,8 @@ function runSmoke() {
         let imgOk = false;
         let imgPickOk = false;
         let imgBoxOk = false;
+        // 第 52 轮：选中图片后能把图片本身复制到系统剪贴板
+        let imgCopyOk = false;
         let imgResizeOk = false;
         let imgEditOk = false;
         let imgPasteOk = false;
@@ -1045,6 +1111,8 @@ function runSmoke() {
         // 第 44 轮：新建笔记继承当前选中的目录/标签；回车把 Markdown 前缀带到下一行
         let newNoteCtxOk = false;
         let enterOk = false;
+        // 第 52 轮：Tab / Shift-Tab 缩进
+        let tabOk = false;
         // 第 45 轮：`==高亮==`
         let hlOk = false;
         // 第 50 轮：高亮可选颜色（设置面板 + 快捷栏右键色板）
@@ -1900,6 +1968,25 @@ function runSmoke() {
           console.log('SMOKE imgBox=' + JSON.stringify(box));
           imgBoxOk = !!box && box.frame - box.tools >= 4 && box.frame - box.tools <= 16
             && box.overflow <= 1;
+
+          // 复制图片：工具条上的「复制」要把真实图片塞进系统剪贴板。
+          // 先清空剪贴板，否则读到的是上一次留下的东西，会假通过。
+          clipboard.clear();
+          const copyToast = await js(`(async () => {
+            const b = [...document.querySelectorAll('.cm-img .img-tool')]
+              .find(x => x.textContent === '复制');
+            if (!b) return 'nobtn';
+            b.click();
+            await new Promise(r => setTimeout(r, 800));
+            const t = document.querySelector('#toast');
+            return t ? t.textContent : '';
+          })()`);
+          const clip = clipboard.readImage();
+          const cs = clip.getSize();
+          imgCopyOk = String(copyToast).includes('已复制图片')
+            && !clip.isEmpty() && cs.width > 0 && cs.height > 0;
+          console.log('SMOKE imgCopy=' + (imgCopyOk ? 'ok' : 'bad')
+            + ' toast=' + copyToast + ' clip=' + cs.width + 'x' + cs.height);
 
           // 选中态的截图：工具条 + 把手 + 描边，肉眼核对
           const selBox = await js(`(()=>{
@@ -2780,6 +2867,48 @@ function runSmoke() {
           }));
           enterOk = typed === 'ok' && keysOk && body.endsWith(want);
 
+          // (c2) Tab / Shift-Tab 缩进。
+          // defaultKeymap 里没有 Tab，不显式绑的话按键会跑出去切焦点 ——
+          // 用户看到的就是「Tab 不能用」。先在空行上按 Tab，缩进就落在行首，
+          // 后面接着打的内容跟上去，断言不用处理行尾空格。
+          const pressTab = shift => js(`(() => {
+            const c = document.querySelector('#editor-host .cm-content');
+            if (!c) return 'nocontent';
+            const ev = new KeyboardEvent('keydown', {
+              key: 'Tab', code: 'Tab', keyCode: 9, which: 9,
+              shiftKey: ${shift ? 'true' : 'false'},
+              bubbles: true, cancelable: true
+            });
+            return c.dispatchEvent(ev) ? 'passed' : 'prevented';
+          })()`);
+
+          await typeText('\n');
+          await wait(250);
+          const tabIn = await pressTab(false);
+          await wait(250);
+          await typeText('ZtabZ');
+          await wait(1200);   // 等写盘防抖（450ms）落完
+          // 缩进断言读「最后一行」的文本：textContent 会把各行拼在一起，
+          // 分不清换行有没有生效，按 .cm-line 逐行取才准
+          const readLines = () => js(
+            `[...document.querySelectorAll('#editor-host .cm-line')].map(l => l.textContent)`);
+          const lastLine = arr => (Array.isArray(arr) && arr.length ? String(arr[arr.length - 1]) : '');
+          const tabInOk = lastLine(await readLines()) === '  ZtabZ';
+          // 缩进必须真的写进 .md —— 只在内存里对、保存后丢了，等于没做
+          const savedIn = editFile ? readFile(editFile) : '';
+          const savedInOk = savedIn.endsWith('\n  ZtabZ');
+
+          const tabOut = await pressTab(true);
+          await wait(1200);
+          const afterOut = lastLine(await readLines());
+          // Shift-Tab 把刚缩进的两个空格收回去
+          tabOk = tabIn === 'prevented' && tabInOk && savedInOk
+            && tabOut === 'prevented' && afterOut === 'ZtabZ';
+          console.log('SMOKE tab=' + (tabOk ? 'ok' : 'bad') + ' ' + JSON.stringify({
+            tabIn, tabOut, in: tabInOk, saved: savedInOk, out: afterOut,
+            tail: savedIn.slice(-20)
+          }));
+
           // (d) `==高亮==`：光标离开这一行之后要变成淡色底，并且把两对 `==` 收起来。
           // 先把上一行清空，腾一个干净的段落出来
           await pressEnter();
@@ -2948,14 +3077,15 @@ function runSmoke() {
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
-          && hlColorOk && hlPalOk
+          && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && dragBarOk && qbCaretOk && qbSelOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
-          newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk
+          newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
+          tabOk, imgCopyOk
         }));
         app.exit(ok ? 0 : 1);
       } catch (err) {

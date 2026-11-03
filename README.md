@@ -95,7 +95,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + click does nothing + double-click into source → click an internal link → todo resolutions → switch the highlight colour (settings panel + right-click palette) → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + click does nothing + double-click into source → click an internal link → todo resolutions → switch the highlight colour (settings panel + right-click palette) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
@@ -134,6 +134,7 @@ A few assertions worth keeping:
 | `preview=cards4 blank0 thumbs1` | Card previews: no blank cards, at least one thumbnail |
 | `crlf="这一行是正文…"` | Excerpts can be extracted from CRLF files too (this one guards a real bug) |
 | `imgEdit=0/1` | Only a **double-click** on an image reverts to the source line |
+| `imgCopy=ok clip=600x220` | After clicking 复制 in the toolbar, the system clipboard really holds a 600×220 image (read back with Electron's `clipboard.readImage()`) |
 | `imgPasteFile=… size=70` | A pasted image really lands on disk |
 | `tagTints=8/8` / `grip=open1 close0` | Tag colors don't collide / `···` opens and closes on click |
 | `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | Both code blocks render, the language label is right, keywords / strings / comments / function names are colored; **a table inside a code block is not treated as a table** |
@@ -184,6 +185,8 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - **A new note inherits where you are.** With a folder selected in the left pane, the note is created in that folder;
   with a tag selected, it gets that tag. It never vanishes from the list you just clicked `新建笔记` in.
 - To turn this off: Settings → Editor → toggle it off.
+- **`Tab` indents, `Shift + Tab` outdents.** One unit is two spaces (not a tab character, which plays badly with
+  Markdown). With several lines selected the whole block moves together — handy for nested lists and indented code.
 
 **Bottom quick bar**
 - A floating toolbar sits at the bottom of the editor so you don't have to remember syntax. It floats over the text rather than taking up layout space (the body already leaves room at the bottom).
@@ -203,6 +206,9 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   a size toolbar floats at the top right and a drag handle appears at the bottom right. Click elsewhere to deselect.
 - **Double-clicking** the image puts the cursor in and reverts it to `![alt](path)` source, for editing the path or alt text.
   The "edit" button at the far right of the toolbar does the same thing.
+- **Images can be copied.** With one selected, hit 复制 in the toolbar or just press `Ctrl/Cmd + C` — the picture itself
+  goes onto the system clipboard, ready to paste into WeChat, Word, Paint. You get the original bytes (PNG / JPEG as stored),
+  not a Markdown path.
 - If the file was deleted or the path is wrong, you get a "找不到图片：xxx" (image not found) line instead of a broken-image icon.
 - Hand-written relative paths (`./img.png`) also work: they resolve against the note's folder first, then the vault root.
 

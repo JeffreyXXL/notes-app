@@ -7,11 +7,11 @@ import {
   revealField, setRevealEffect, setSearchEffect, searchField,
   livePreviewPlugin, hitPlugin, tableBlocksField, tableField,
   imageBaseField, imageBlocksField, imageField, setImageBaseEffect,
-  selectedImageField, imageSelectPlugin,
+  selectedImageField, imageSelectPlugin, copySelectedImage,
   codeBlocksField, codeField, linkPlugin, setLinkHandler
 } from './live-preview';
 import type { LinkKind } from './live-preview';
-import { toggleWrap, continueMarkup } from './commands';
+import { toggleWrap, continueMarkup, indentBlock } from './commands';
 import { insertImages, imageFilesFrom } from './image-insert';
 
 export type { EditorView } from '@codemirror/view';
@@ -99,9 +99,15 @@ export function mount(
           { key: 'Mod-b', run: v => { toggleWrap(v, '**', '**', '粗体'); return true; } },
           { key: 'Mod-i', run: v => { toggleWrap(v, '*', '*', '斜体'); return true; } },
           { key: 'Mod-Shift-h', run: v => { toggleWrap(v, '==', '==', '高亮'); return true; } },
+          // 选中图片时 Ctrl+C 复制图片本身，没选中就返回 false 让浏览器复制文字
+          { key: 'Mod-c', run: copySelectedImage },
           // 回车续格式：待办 / 列表 / 引用。不归它管时返回 false，
           // 继续落到下面的 insertNewlineAndIndent
           { key: 'Enter', run: continueMarkup },
+          // Tab / Shift-Tab 缩进。defaultKeymap 里没有 Tab，不显式绑的话
+          // 按键会跑出去切焦点 —— 用户看到的就是「Tab 不能用」
+          { key: 'Tab', run: v => indentBlock(v, 1) },
+          { key: 'Shift-Tab', run: v => indentBlock(v, -1) },
           ...defaultKeymap,
           ...historyKeymap
         ]),
