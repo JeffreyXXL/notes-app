@@ -135,6 +135,10 @@ export function mount(
     })
   });
 
+  // 冒烟和调试用：读光标偏移、原子区间这类内部状态，光看 DOM 是看不出来的
+  // （光标停在看不见的标记上时，DOM 上完全没痕迹）。生产包里也就是多一个引用
+  (window as unknown as { __editor?: EditorView }).__editor = view;
+
   if (opts.reveal === false) view.dispatch({ effects: setRevealEffect.of(false) });
   if (opts.imageBase) view.dispatch({ effects: setImageBaseEffect.of(opts.imageBase) });
   setLinkHandler(opts.onLink ?? null);

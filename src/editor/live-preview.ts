@@ -1127,11 +1127,25 @@ const RULES: Rule[] = [
   }
 ];
 
-/** 处理一行里 skip 之后的部分：先做遮罩占位，避免多个规则互相踩 */
-function inline(out: Range<Decoration>[], lineFrom: number, skip: number, text: string): void {
+/**
+ * 处理一行里 skip 之后的部分：先做遮罩占位，避免多个规则互相踩。
+ *
+ * `lineCaret` 是空光标在这一行里的偏移（不在这一行给 -1）。判断粒度是**每一处标记**
+ * 而不是整行：光标落在某一处标记的范围内，就只让那一处露源码，同一行的加粗、高亮、
+ * 行内代码照常渲染。早先只要光标在这一行就把所有标记全摊开，改一个字整行闪一下。
+ */
+function inline(
+  out: Range<Decoration>[],
+  atomics: Range<Decoration>[],
+  lineFrom: number,
+  skip: number,
+  text: string,
+  lineCaret: number
+): void {
   const s = text.slice(skip);
   if (!s) return;
   const base = lineFrom + skip;
+  const caret = lineCaret < 0 ? -1 : lineCaret - skip;
   const mask = new Uint8Array(s.length);
   const free = (a: number, b: number) => {
     for (let i = a; i < b; i++) if (mask[i]) return false;
@@ -1142,7 +1156,11 @@ function inline(out: Range<Decoration>[], lineFrom: number, skip: number, text: 
     if (b > a) out.push(Decoration.mark({ class: cls }).range(base + a, base + b));
   };
   const cut = (a: number, b: number) => {
-    if (b > a) out.push(hideDeco.range(base + a, base + b));
+    if (b > a) {
+      const d = hideDeco.range(base + a, base + b);
+      out.push(d);
+      atomics.push(d);
+    }
   };
 
   for (const rule of RULES) {
@@ -1152,6 +1170,11 @@ function inline(out: Range<Decoration>[], lineFrom: number, skip: number, text: 
       if (!m[0]) { rule.re.lastIndex++; continue; }
       if (!free(m.index, m.index + m[0].length)) continue;
       claim(m.index, m.index + m[0].length);
+      // 光标落在这一处标记**内部**才留源码，其余照常渲染。
+      // 两端不算「里面」：光标紧贴 `**粗**` 的左边或右边时，用户是想在这段前后
+      // 接着写，不是在改这段 —— 此时保持渲染。这也是 atomicRanges 能生效的前提，
+      // 否则光标一贴边界标记就露出来，原子区间当次就没了，方向键会逐字符走进去
+      if (caret > m.index && caret < m.index + m[0].length) continue;
       rule.apply(m, { mark, cut });
     }
   }
@@ -1161,20 +1184,40 @@ function inline(out: Range<Decoration>[], lineFrom: number, skip: number, text: 
    主装饰构建
    ============================================================ */
 
-function buildDecorations(view: EditorView): DecorationSet {
+interface Decorations {
+  deco: DecorationSet;
+  /** 只含被藏掉的标记区间 —— 交给 atomicRanges，光标才不会走进看不见的地方 */
+  atomic: DecorationSet;
+}
+
+function buildDecorations(view: EditorView): Decorations {
   const state: EditorState = view.state;
   const doc = state.doc;
   const sel = state.selection.main;
   const aFrom = doc.lineAt(sel.from).number;
   const aTo = doc.lineAt(sel.to).number;
   const out: Range<Decoration>[] = [];
+  const atomics: Range<Decoration>[] = [];
+
+  // 被藏掉的标记：既要进 deco 去渲染，也要进 atomics 让光标跳过。
+  // 漏掉后者的话，光标能停在这些位置上 —— 屏幕上什么都没有，按方向键像卡住
+  const pushHidden = (from: number, to: number) => {
+    const d = hideDeco.range(from, to);
+    out.push(d);
+    atomics.push(d);
+  };
+  const pushReplaced = (widget: WidgetType, from: number, to: number) => {
+    const d = Decoration.replace({ widget }).range(from, to);
+    out.push(d);
+    atomics.push(d);
+  };
 
   // 代码块整块由 codeField 渲染，这里只负责「光标在块内」时的等宽源码样式
   const codeBlocks = state.field(codeBlocksField);
   const codeMap = new Map<number, CodeBlock>();
   for (const b of codeBlocks) for (let k = b.s; k <= b.e; k++) codeMap.set(k, b);
 
-  if (!view.visibleRanges.length) return Decoration.none;
+  if (!view.visibleRanges.length) return { deco: Decoration.none, atomic: Decoration.none };
 
   const reveal = state.field(revealField) !== false;
   const focused = view.hasFocus;
@@ -1205,7 +1248,7 @@ function buildDecorations(view: EditorView): DecorationSet {
     if (!text) continue;
 
     if (/^\s*(?:---|\*\*\*|___)\s*$/.test(text)) {
-      if (!active) out.push(hideDeco.range(line.from, line.to));
+      if (!active) pushHidden(line.from, line.to);
       out.push(lineDeco('cm-hr').range(line.from));
       continue;
     }
@@ -1236,7 +1279,7 @@ function buildDecorations(view: EditorView): DecorationSet {
     if (m) {
       lineCls = 'cm-h' + m[1].length;
       skip = m[0].length;
-      if (!active) out.push(hideDeco.range(line.from, line.from + skip));
+      if (!active) pushHidden(line.from, line.from + skip);
     }
 
     if (!lineCls) {
@@ -1244,7 +1287,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       if (m) {
         lineCls = 'cm-quote';
         skip = m[0].length;
-        if (!active) out.push(hideDeco.range(line.from, line.from + skip));
+        if (!active) pushHidden(line.from, line.from + skip);
       }
     }
 
@@ -1263,8 +1306,7 @@ function buildDecorations(view: EditorView): DecorationSet {
         const arrowLen = am ? am[0].length : 0;
 
         if (!active) {
-          out.push(Decoration.replace({ widget: new TodoWidget(checked, bracket) })
-            .range(start, line.from + m[0].length));
+          pushReplaced(new TodoWidget(checked, bracket), start, line.from + m[0].length);
 
           // 删除线必须在行内标记之前 push：同一 from 时长范围要先入。
           // 划掉的范围到箭头为止 —— 解决方式不是「待办本身」，不该跟着划掉
@@ -1295,8 +1337,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       if (m) {
         const start = line.from + m[1].length;
         if (!active) {
-          out.push(Decoration.replace({ widget: new MarkerWidget('•', 'cm-bullet') })
-            .range(start, line.from + m[0].length));
+          pushReplaced(new MarkerWidget('•', 'cm-bullet'), start, line.from + m[0].length);
         }
         lineCls = 'cm-li';
         skip = m[0].length;
@@ -1314,26 +1355,50 @@ function buildDecorations(view: EditorView): DecorationSet {
     }
 
     if (lineCls) out.push(lineDeco(lineCls).range(line.from));
-    if (active) continue;
 
-    inline(out, line.from, skip, text);
+    // 行首标记（#、>、- [ ]、•、1.）还是按整行判断 —— 它们是行级语义，光标在这一行
+    // 就整块露源码；行内标记交给 inline 一处一处判断，改一个字不会再让整行闪
+    const caret = focused && reveal && aFrom === aTo && aFrom === i
+      ? sel.from - line.from
+      : -1;
+    inline(out, atomics, line.from, skip, text, caret);
   }
 
-  return out.length ? Decoration.set(out, true) : Decoration.none;
+  return {
+    deco: out.length ? Decoration.set(out, true) : Decoration.none,
+    atomic: atomics.length ? Decoration.set(atomics, true) : Decoration.none
+  };
 }
 
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    constructor(view: EditorView) { this.decorations = buildDecorations(view); }
+    atomic: DecorationSet;
+    constructor(view: EditorView) {
+      const d = buildDecorations(view);
+      this.decorations = d.deco;
+      this.atomic = d.atomic;
+    }
     update(u: ViewUpdate) {
       const revealChanged = u.startState.field(revealField) !== u.state.field(revealField);
       if (u.docChanged || u.selectionSet || u.viewportChanged || u.focusChanged || revealChanged) {
-        this.decorations = buildDecorations(u.view);
+        const d = buildDecorations(u.view);
+        this.decorations = d.deco;
+        this.atomic = d.atomic;
       }
     }
   },
-  { decorations: v => v.decorations }
+  {
+    decorations: v => v.decorations,
+    // 被藏掉的标记在文档里仍然占着字符位置。不声明成原子的，光标会走进去 ——
+    // 屏幕上看不见任何东西，按方向键像卡住，点在那儿像是「点不进去」。
+    //
+    // 只能传 replace 的区间：把 mark 也塞进来，光标连加粗文字内部都进不去了。
+    // 所以这里用的是单独的 atomic 集合，不是 decorations
+    provide: plugin => EditorView.atomicRanges.of(
+      view => view.plugin(plugin)?.atomic ?? Decoration.none
+    )
+  }
 );
 
 /* ============================================================

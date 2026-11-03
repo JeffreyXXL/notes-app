@@ -1124,6 +1124,9 @@ function runSmoke() {
         // 第 54 轮：空光标按色板不能写出「高亮」占位词；链接平点落光标、Ctrl+点才跳
         let hlEmptyOk = false;
         let imgClick2Ok = false;
+        // 第 55 轮：行内标记按「每一处」判断（不是整行），以及光标跳过被藏掉的标记
+        let hlNodeOk = false;
+        let atomicOk = false;
         let blockClickOk = false;
         let plusHitOk = false;
         let qbEndOk = false;
@@ -3010,6 +3013,21 @@ function runSmoke() {
             try { return document.execCommand('insertText', false, ${JSON.stringify(t)}) ? 'ok' : 'fail'; }
             catch { return 'fail'; }
           })()`);
+
+          // 在文末追加一整行。以前直接 insertText('\n内容')，落点会跑到光标中间，
+          // 把原行的尾巴切下来带到新行 —— 测出来的行里总跟着莫名其妙的残留字符
+          const appendLine = async t => {
+            await js(`(() => {
+              const ed = window.__editor;
+              const end = ed.state.doc.length;
+              ed.dispatch({
+                changes: { from: end, insert: '\\n' + ${JSON.stringify(t)} },
+                selection: { anchor: end + 1 + ${t.length} }
+              });
+              return '';
+            })()`);
+            await wait(400);
+          };
           // 合成的 keydown 也要走 CodeMirror 挂在 contentDOM 上的 keymap；
           // dispatchEvent 返回 false 说明 preventDefault 了 —— 也就是被我们接管了
           const pressEnter = () => js(`(() => {
@@ -3147,8 +3165,7 @@ function runSmoke() {
 
             // (d3) 逐处上色：同一行里两处，各自是自己的底色。
             // 光标先离开这一行 —— 光标所在行会露出源码，什么都量不到
-            await typeText('\n==甲=={green}==乙=={pink}');
-            await wait(350);
+            await appendLine('==甲=={green}==乙=={pink}');
             await keyOf('ArrowUp');
             await wait(500);
             const two = JSON.parse(String(await js(`(() => {
@@ -3254,8 +3271,7 @@ function runSmoke() {
           // (d5) 空光标按色板：只插一对空的 `==|==`，正文里不能多出「高亮」两个字。
           // 以前这里插的是 `==高亮==` 并把「高亮」框成选区，一按色板就凭空多俩字
           try {
-            await typeText('\n');
-            await wait(300);
+            await appendLine('');
             const pal = JSON.parse(String(await js(`(() => {
               const b = document.querySelector('[data-qb="hl"]');
               if (!b) return '{"err":"nobtn"}';
@@ -3286,6 +3302,84 @@ function runSmoke() {
             }
           } catch (err) {
             console.log('SMOKE hlEmptyFailed=' + err.message);
+          }
+
+          // (d6) 行内标记按「每一处」判断，不是整行。
+          // 光标停在中间那段普通文字上时，左右两处高亮都该保持渲染；
+          // 光标进到第一处里面，只有第一处露源码，第二处不受影响
+          try {
+            await appendLine('ZZ==甲=={green} 和 ==乙=={pink}');
+            // ZZ 是定位用的锚点，渲染后不会被吃掉
+            const putCaret = rel => js(`(() => {
+              const ed = window.__editor;
+              const line = ed.state.doc.lineAt(ed.state.selection.main.head);
+              const at = ${rel} < 0 ? line.text.indexOf('和') + 1 : ${rel};
+              ed.dispatch({ selection: { anchor: line.from + at } });
+              return line.text;
+            })()`);
+            const snap = () => js(`(() => {
+              const ln = [...document.querySelectorAll('#editor-host .cm-line')]
+                .find(l => l.textContent.includes('ZZ'));
+              if (!ln) return '{"err":"noline"}';
+              return JSON.stringify({
+                text: ln.textContent,
+                green: !!ln.querySelector('.cm-hl-green'),
+                pink: !!ln.querySelector('.cm-hl-pink')
+              });
+            })()`);
+            // -1 = 「和」后面（两处高亮之外）；4 = 「甲」上面（第一处里面）
+            await putCaret(-1);
+            await wait(400);
+            const mid = JSON.parse(String(await snap()));
+            await putCaret(4);
+            await wait(400);
+            const inside = JSON.parse(String(await snap()));
+            hlNodeOk = mid.green && mid.pink && !mid.text.includes('==')
+              && inside.pink && !inside.green
+              && inside.text.includes('==甲==') && !inside.text.includes('==乙==');
+            console.log('SMOKE hlNode=' + (hlNodeOk ? 'ok' : 'bad') +
+              ' mid=' + JSON.stringify(mid) + ' inside=' + JSON.stringify(inside));
+            for (let i = 0; i < 2; i++) {
+              win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
+              win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
+              await wait(300);
+            }
+          } catch (err) {
+            console.log('SMOKE hlNodeFailed=' + err.message);
+          }
+
+          // (d7) 被藏掉的标记要声明成原子的：光标从 `a` 后面按一下右方向键，
+          // 应该跳过整个 `**` 落到「粗」前面，而不是停在两个星号中间 ——
+          // 停在那里屏幕上什么都没有，看着就是「光标进不去 / 卡住」
+          try {
+            await appendLine('ZZa**粗**');
+            const base = JSON.parse(String(await js(`(() => {
+              const ed = window.__editor;
+              const line = ed.state.doc.lineAt(ed.state.selection.main.head);
+              ed.dispatch({ selection: { anchor: line.from + 3 } });
+              return JSON.stringify({ from: line.from, text: line.text });
+            })()`)));
+            await wait(350);
+            // 合成的 keydown 一样会走 CodeMirror 挂在 contentDOM 上的 keymap
+            const handled = String(await js(`(() => {
+              const c = document.querySelector('#editor-host .cm-content');
+              c.focus();
+              const ev = new KeyboardEvent('keydown', {
+                key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39,
+                bubbles: true, cancelable: true
+              });
+              c.dispatchEvent(ev);
+              return ev.defaultPrevented ? 'handled' : 'ignored';
+            })()`));
+            await wait(400);
+            const col = Number(await js(
+              `(() => window.__editor.state.selection.main.head - ${base.from})()`));
+            // 3 -> 5：跳过 `**`（区间 [3,5]）。没有 atomicRanges 会停在 4
+            atomicOk = base.text === 'ZZa**粗**' && col === 5;
+            console.log('SMOKE atomic=' + (atomicOk ? 'ok' : 'bad') +
+              ' text=' + JSON.stringify(base.text) + ' col=' + col + ' key=' + handled);
+          } catch (err) {
+            console.log('SMOKE atomicFailed=' + err.message);
           }
 
           // (e) 笔记链接：默认写成 `[[目录/标题]]`，关掉开关只剩 `[[标题]]`；
@@ -3378,7 +3472,7 @@ function runSmoke() {
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
-          && hlEmptyOk && imgClick2Ok
+          && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
@@ -3387,6 +3481,7 @@ function runSmoke() {
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
+          hlNodeOk, atomicOk,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);

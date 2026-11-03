@@ -149,6 +149,9 @@ A few assertions worth keeping:
 | `hlPal=ok on=green raw="==甲=={green}==乙=={pink}" now="==甲=={purple}==乙=={pink}"` | Right-click recolour of an existing highlight: **only the colour id changes**, the number of `==` is identical (one highlight never gets split into two) |
 | `hlEmpty=ok line="==Zz=={orange}…"` | An empty caret plus a colour dot inserts an empty pair only — typing gives `==Zz==`, and **no 「高亮」 placeholder lands in the note** |
 | `imgClick2=ok back=1/0 1st=1/0 2nd=0/1` | The first click only selects the image; a **second click** enters source. A single click used to never produce a caret |
+| `hlNode=ok mid={"text":"ZZ甲 和 乙","green":true,"pink":true}` | With the caret **between** two highlights, both stay rendered (`!text.includes('==')`) |
+| `hlNode inside={"text":"ZZ==甲=={green} 和 乙","green":false,"pink":true}` | With the caret inside the first one, **only that one** shows source; the second stays a coloured band |
+| `atomic=ok text="ZZa**粗**" col=5 key=handled` | One ArrowRight from after `a` **skips the whole `**`** and lands before 粗 (3→5); without atomic ranges it stops at 4, where nothing is visible |
 | `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
 | `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
@@ -190,7 +193,13 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   `==|==` with the caret in the middle — it never writes a placeholder word into your note.
   The default pen lives in Settings → Appearance → Highlight and is
   what the button and the shortcut use.
-- When the cursor sits on a line, that line reveals its Markdown source so you can edit it; move away and it renders again.
+- **Source is revealed per span, not per line.** Putting the caret inside `**bold**` or `==highlight==` reverts only that
+  span; other markup on the same line keeps rendering — editing one word no longer makes the whole line flash into source.
+  Line-level markers (`#`, `- `, `> `, `- [ ] `) are the exception: they are line semantics, so the caret anywhere on the
+  line reveals them.
+- **Hidden markers are transparent *and* unstoppable for the cursor**: one ArrowRight skips the whole `**` instead of
+  parking between two invisible asterisks. Otherwise the caret stalls where nothing is drawn, which reads as "these lines
+  won't take a cursor".
 - **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
   Enter starts the next line with the same marker: ordered lists increment, new todos always start unchecked, indentation
   is carried over. Press Enter again on an empty item and the marker is dropped, so you get a plain paragraph back
@@ -272,7 +281,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   see [last conclusion](工作/产品/方向.md)  ← by path, most precise
   ```
 
-- **A plain click on a link does not navigate** — it just drops the caret in, and the line switches to source like any other.
+- **A plain click on a link does not navigate** — it just drops the caret in, and that span switches to source like any other.
   Navigating takes `Ctrl` / `Cmd`. Plain clicks used to navigate, which meant every line containing a link was a line you
   could not put a cursor into; with a few links in a note, that reads as "half the page is unclickable".
 - `[[title]]` matches in stages: relative to the current note's folder → vault path → same filename → same title → title contains
@@ -286,7 +295,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   "it opened but I can't see it".
 - When nothing matches you get a light toast ("没有找到「xxx」这篇笔记" — no such note), not silence.
 - The quick bar has two link buttons: one inserts an external link `[text](url)`, one inserts an internal link `[[folder/note name]]`.
-- To edit the link text: click elsewhere on the line to put the cursor in (the line reverts to source), or move there with arrow keys.
+- To edit the link text: click the link itself — the caret lands in the text and that span reverts to `[[…]]` source (other markup on the line is unaffected).
 
 **Todo resolutions**
 - Each todo can carry a "how this gets solved" note after an arrow:
@@ -745,7 +754,7 @@ So `collectTables()` / `collectImages()` both compute `fenceMask()` first and sk
 **⑪ Link clicks must intercept `mousedown` in the capture phase**
 
 CodeMirror's own `mousedown` is bound on `contentDOM`; by the time the event bubbles to `view.dom`, it has already moved the cursor
-into that line. The cursor entering the line reverts it to source, the link `<span>` is replaced on the spot, and `target` no longer
+into that line. The caret landing on the link reverts that span to source, the link `<span>` is replaced on the spot, and `target` no longer
 matches at `click` time. So `linkPlugin` uses `addEventListener('mousedown', fn, true)` and does `preventDefault + stopPropagation`
 on a hit.
 
