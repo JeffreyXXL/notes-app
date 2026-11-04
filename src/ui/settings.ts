@@ -41,6 +41,13 @@ export function renderVaultInfo(): void {
   }
   const idx = el<HTMLElement>('idx-info');
   if (idx) idx.textContent = `${store.notes.length} 篇 · ${formatBytes(store.totalBytes)}`;
+  // 版本号来自构建期常量（package.json 的 version），界面上一眼就能确认
+  // 手上跑的是不是刚打的那个包 —— 光看 exe 看不出来
+  const ver = el<HTMLElement>('app-version');
+  if (ver) {
+    ver.textContent = 'v' + __APP_VERSION__;
+    ver.title = '在 package.json 里改，重新构建后生效';
+  }
 }
 
 /** 重建索引 = 重新扫描笔记库（.md 才是真相源） */

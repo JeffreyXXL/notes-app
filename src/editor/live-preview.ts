@@ -1010,9 +1010,9 @@ export function linkAt(state: EditorState, pos: number): LinkHit | null {
  *   2. 命中就立刻 preventDefault + stopPropagation，光标不动 ——
  *      光标一进这一行，整行会切回源码，链接的 span 当场被替换掉。
  *
- * 只有按住 Ctrl / Cmd 才算「打开链接」。以前平点一下就跳走，于是**带链接的行
- * 整行都点不进光标** —— 用户报的「有些行点不到、光标进不去」就是这里。
- * 平点现在是普通点击：光标落进来、这一行切回源码，跟点别的文字没区别。
+ * 平点链接文字 = 打开（跟 Obsidian 的实时预览一致）。想改链接文字，点这一行的
+ * 空白处：光标一进来整行就露出 `[[...]]` 源码，那时随便改。
+ * 以前只认 Ctrl+点击，结果「链接点不动」，等于把最常用的操作藏起来了。
  */
 export const linkPlugin = ViewPlugin.fromClass(
   class {
@@ -1021,7 +1021,8 @@ export const linkPlugin = ViewPlugin.fromClass(
     constructor(readonly view: EditorView) {
       this.onDown = (e: MouseEvent) => {
         if (e.button !== 0) return;
-        if (!(e.ctrlKey || e.metaKey)) return;
+        // 双击的第二下不再触发，免得连点两下时刚跳走又跳一次
+        if (e.detail > 1) return;
         if (!linkHandler) return;
         const t = e.target as HTMLElement | null;
         if (!t?.closest?.('.cm-link')) return;
@@ -1039,7 +1040,7 @@ export const linkPlugin = ViewPlugin.fromClass(
       this.onOver = (e: MouseEvent) => {
         const t = e.target as HTMLElement | null;
         const link = t?.closest?.('.cm-link') as HTMLElement | null;
-        if (link && !link.title) link.title = 'Ctrl+点击打开';
+        if (link && !link.title) link.title = '点击打开 · 想改文字就点这一行的空白处';
       };
       view.dom.addEventListener('mousedown', this.onDown, true);
       view.dom.addEventListener('mouseover', this.onOver);

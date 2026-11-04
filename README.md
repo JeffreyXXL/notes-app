@@ -95,7 +95,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo notes (indented lines join into one box, clicking one puts the caret on that line, Shift-Enter and Enter both break lines inside the note, and `→` is demoted to ordinary text) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → a single click on an internal link navigates, clicking the blank part of that line still drops the caret → todo notes (indented lines join into one box, clicking one puts the caret on that line, Shift-Enter and Enter both break lines inside the note, and `→` is demoted to ordinary text) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
@@ -140,9 +140,10 @@ A few assertions worth keeping:
 | `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | Both code blocks render, the language label is right, keywords / strings / comments / function names are colored; **a table inside a code block is not treated as a table** |
 | `codeClick=1/2` | **A single click drops the cursor into the code block** (one block fewer, two fence lines more). It used to do nothing at all, which users reported as "these lines can't be clicked" |
 | `blockClick=ok {"blocks":0,"fences":2}` | Same thing, verified independently on another note |
-| `link={"wiki":2,"note":1,"add":1}` | Two internal links / one arrow-style note / one `＋` button |
-| `wikiCaret="点这里跳到 [[图片测试]]。"` | **A plain click on a link drops the caret in that line** instead of navigating |
-| `linkJump="图片测试"` | **Ctrl + click** on `[[图片测试]]` is what actually navigates (verified via the selected card in the middle pane) |
+| `link={"wiki":2,"todo":3,"add":2}` | Two internal links / three todos / two `＋` buttons (the one with an indented note has none) |
+| `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | Clicking a **blank spot** on the link line drops the caret at 11, inside that line (10–25) — a line containing a link still takes the caret |
+| `linkJump="图片测试"` | A **plain click** on `[[图片测试]]` (no modifier) navigates (verified via the selected card in the middle pane) |
+| `version=ok {"verText":"v0.1.9","app":"0.1.9"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
 | `hlEach=ok {"a":{"cls":"cm-hl cm-hl-green",…},"b":{"cls":"cm-hl cm-hl-pink",…}}` | **Two highlights on one line, each with its own colour** — and the line renders as just 甲乙, markers and colour ids hidden |
@@ -280,16 +281,17 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   widget and the problem is gone.
 
 **Linking to another note**
-- Both forms are recognized, and both navigate on **Ctrl/Cmd + click**:
+- Both forms are recognized, and **a single click navigates** (no modifier needed):
 
   ```markdown
   see [[产品方向思考]]                     ← by title, easiest
   see [last conclusion](工作/产品/方向.md)  ← by path, most precise
   ```
 
-- **A plain click on a link does not navigate** — it just drops the caret in, and that span switches to source like any other.
-  Navigating takes `Ctrl` / `Cmd`. Plain clicks used to navigate, which meant every line containing a link was a line you
-  could not put a cursor into; with a few links in a note, that reads as "half the page is unclickable".
+- To edit a link, click a **blank spot on the same line** (anywhere outside the link), then walk into it with the arrow
+  keys — once the caret is inside the link text that one span shows `[[...]]` source and you can change it.
+  It used to be the other way round (plain click only placed the caret, `Ctrl+click` navigated), which made links feel
+  unclickable — the most common action was hidden behind a modifier.
 - `[[title]]` matches in stages: relative to the current note's folder → vault path → same filename → same title → title contains
   (only if the result is unique). So after a note is renamed, `[[old title]]` still finds it.
 - The quick bar's internal-link button writes the **full path** (`[[客户/项目/标题]]`) by default. The vault is split by customer,
@@ -608,6 +610,8 @@ Body…
 - `hidden: true` means hidden, also only written when hidden. Hidden notes appear in no list or search and don't count toward folder/tag totals.
 - Delete means `trashed: true` — the file is still there. Emptying the trash is what really deletes.
 - "重建索引" (rebuild index) rescans the directory; click it any time.
+- "版本" (version) is the build you are running, baked in from `package.json` at build time — so you can tell at a glance
+  whether the exe you double-clicked is the one you just packaged.
 - Three plain-text extensions show up as ordinary text in other editors and don't affect reading:
   `[[another note]]` (internal link), trailing `{width=320}` (image width), and an indented note under a todo.
 - Folder order / tag order / app name / password digest live in `settings.json`, not in `.md` files — they are preferences about
