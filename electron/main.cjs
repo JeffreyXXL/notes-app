@@ -965,14 +965,15 @@ function prepareSmokeFixtures() {
     '```', ''
   ].join('\n');
 
-  // 链接 + 待办解决方式
+  // 链接 + 待办备注
   const linkBody = [
     '---', 'created: 4', 'updated: 4', '---', '',
     '# 链接与待办', '',
     '点这里跳到 [[图片测试]]。', '',
-    '- [ ] 还没写解决方式的任务',
+    '- [ ] 还没写备注的任务',
+    // 箭头现在只是普通文字，留着这条当回归用例：它不该再变出第二个备注框
     '- [x] 已经写了的任务 → 换成新方案，见 [[换行符测试]]',
-    // 缩进写的备注：可以有好几行。老写法（箭头后面一行）也留着，两种都要能渲染
+    // 缩进写的备注：可以有好几行
     '- [ ] 缩进写的备注，可以有好几行',
     '  第一行：换掉旧的 token 校验',
     '  第二行：加上重试和超时', ''
@@ -1135,10 +1136,11 @@ function runSmoke() {
         // 启动时左两栏默认摊开、待办备注改成下方独立的框
         let imgCaretOk = false;
         let collapseOk = false;
-        let todoNoteOk = false;
+        let todoArrowOk = false;
         // 第 57 轮：备注改成「待办下面缩进的行」，可以有很多行；
         // 回车在备注里换行，Shift-Enter 起一行
         let noteMultiOk = false;
+        let noteStyleOk = false;
         let noteEnterOk = false;
         let blockClickOk = false;
         let plusHitOk = false;
@@ -2509,7 +2511,7 @@ function runSmoke() {
           console.log('SMOKE codeFailed=' + err.message);
         }
 
-        // ② 笔记链接 + 待办解决方式
+        // ② 笔记链接 + 待办备注
         try {
           await openNote('链接与待办');
           await wait(800);
@@ -2518,73 +2520,37 @@ function runSmoke() {
             const q = s => document.querySelectorAll(s).length;
             return {
               wiki: q('.cm-wikilink'),
-              note: q('.cm-todo-note'),
-              noteText: (document.querySelector('.cm-todo-note') || {}).textContent || '',
+              todo: q('.cm-todoline'),
               add: q('.cm-todonote-add')
             };
           })()`);
           console.log('SMOKE link=' + JSON.stringify(li));
 
-          // 备注不再是「→」后面那串小字，而是挂在标题下面的一块带框区域。
-          // 箭头只是语法分隔符，平时不显示（光标进这一行时整行露源码，那时能改）
+          // 箭头不再是语法：`→ 备注` 现在跟超链接、加粗一样按字面渲染成普通文字。
+          // 备注只认「缩进在待办下面」的行，所以整篇里带框的只有那一条
           try {
-            const tn = JSON.parse(String(await js(`(()=>{
-              const n = document.querySelector('.cm-todo-note');
-              if (!n) return JSON.stringify({ err: 'nonote' });
-              const cs = getComputedStyle(n);
-              const r = n.getBoundingClientRect();
-              const line = n.closest('.cm-line');
-              const title = line ? line.querySelector('.cm-todo') : null;
-              const tr = title ? title.getBoundingClientRect() : null;
-              const a = document.querySelector('.cm-todo-arrow');
+            const ta = JSON.parse(String(await js(`(()=>{
+              const q = s => document.querySelectorAll(s).length;
+              let arrowText = '';
+              for (const l of document.querySelectorAll('#editor-host .cm-line')) {
+                if (String(l.textContent).includes('→')) { arrowText = String(l.textContent); break; }
+              }
               return JSON.stringify({
-                display: cs.display,
-                border: cs.borderTopWidth,
-                top: Math.round(r.top),
-                titleTop: tr ? Math.round(tr.top) : -1,
-                left: Math.round(r.left),
-                titleLeft: tr ? Math.round(tr.left) : -1,
-                arrow: a ? getComputedStyle(a).display : 'absent',
-                text: String(n.textContent).slice(0, 24),
-                x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2)
+                note: q('.cm-todo-note'),
+                arrow: q('.cm-todo-arrow'),
+                withNote: q('.cm-todo-withnote'),
+                add: q('.cm-todonote-add'),
+                arrowText: arrowText.slice(0, 40)
               });
             })()`)));
-            if (tn.err) throw new Error(tn.err);
 
-            // 点备注这块，光标必须落在待办那一行里 —— 它是这一行的内容。
-            // 高度表漏掉这块的高度的话，点下去会落到别的行上
-            await clickAt({ x: tn.x, y: tn.y });
-            const head = Number(await js('(() => window.__editor.state.selection.main.head)()'));
-            const todoLine = JSON.parse(String(await js(`(()=>{
-              const ed = window.__editor;
-              for (let n = 1; n <= ed.state.doc.lines; n++) {
-                const l = ed.state.doc.line(n);
-                if (l.text.includes('换成新方案')) return JSON.stringify({ from: l.from, to: l.to });
-              }
-              return JSON.stringify({ from: -1, to: -1 });
-            })()`)));
-
-            todoNoteOk = tn.display === 'block' && tn.border !== '0px'
-              && tn.titleTop > 0 && tn.top > tn.titleTop + 4
-              && tn.left > tn.titleLeft
-              && tn.arrow === 'none'
-              && String(tn.text).trim().startsWith('换成新方案')
-              && head >= todoLine.from && head <= todoLine.to;
-            console.log('SMOKE todoNote=' + (todoNoteOk ? 'ok' : 'bad') +
-              ' head=' + head + ' line=' + todoLine.from + '-' + todoLine.to +
-              ' ' + JSON.stringify(tn));
-
-            // 复位：点回标题，待办重新渲染成卡片，截图才是干净的样子
-            const backPt = await js(`(()=>{
-              const l = document.querySelector('#editor-host .cm-line');
-              if (!l) return null;
-              const r = l.getBoundingClientRect();
-              return { x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2) };
-            })()`);
-            if (backPt) await clickAt(backPt);
-            await wait(400);
+            todoArrowOk = ta.note === 0 && ta.arrow === 0
+              && ta.withNote === 1 && ta.add === 2
+              && ta.arrowText.indexOf('→') >= 0;
+            console.log('SMOKE todoArrow=' + (todoArrowOk ? 'ok' : 'bad') +
+              ' ' + JSON.stringify(ta));
           } catch (err) {
-            console.log('SMOKE todoNoteFailed=' + err.message);
+            console.log('SMOKE todoArrowFailed=' + err.message);
           }
 
           // 缩进写的备注：两行拼成一块 —— 首行圆上角、末行圆下角，中间不画线。
@@ -2648,7 +2614,33 @@ function runSmoke() {
             console.log('SMOKE noteMultiFailed=' + err.message);
           }
 
-          // 截图：待办的「→ 解决方式」和行尾的「＋」
+          // 备注的行距要跟框外面的正文一模一样，框下面还要留出空。
+          // 行距以前写死 1.65，比正文（--doc-lh）紧一截；现在按字号把倍数除回去
+          try {
+            const ns = JSON.parse(String(await js(`(()=>{
+              const note = document.querySelector('#editor-host .cm-todonote');
+              const sc = document.querySelector('#editor-host .cm-scroller');
+              const all = [...document.querySelectorAll('#editor-host .cm-todonote')];
+              const last = all[all.length - 1];
+              const next = last ? last.nextElementSibling : null;
+              return JSON.stringify({
+                noteLh: note ? parseFloat(getComputedStyle(note).lineHeight) : -1,
+                bodyLh: sc ? parseFloat(getComputedStyle(sc).lineHeight) : -1,
+                gapPad: next ? getComputedStyle(next).paddingTop : '',
+                gapCls: next ? String(next.className) : ''
+              });
+            })()`)));
+
+            noteStyleOk = ns.noteLh > 0 && ns.bodyLh > 0
+              && Math.abs(ns.noteLh - ns.bodyLh) < 0.8
+              && ns.gapPad === '10px' && /cm-todonote-gap/.test(ns.gapCls);
+            console.log('SMOKE noteStyle=' + (noteStyleOk ? 'ok' : 'bad') +
+              ' ' + JSON.stringify(ns));
+          } catch (err) {
+            console.log('SMOKE noteStyleFailed=' + err.message);
+          }
+
+          // 截图：待办的缩进备注（框）和行尾的「＋」
           win.showInactive();
           await wait(600);
           console.log('SMOKE linkShot=' + (await saveShot('note-links.png')));
@@ -2698,8 +2690,7 @@ function runSmoke() {
           const activeTitle = await js("(document.querySelector('.card.active h4') || {}).textContent || ''");
           console.log('SMOKE linkJump=' + JSON.stringify(activeTitle));
 
-          linkOk = li.wiki === 2 && li.note === 1 && li.add === 1
-            && String(li.noteText).indexOf('换成新方案') >= 0
+          linkOk = li.wiki === 2 && li.todo === 3 && li.add === 2
             && wikiCaret.includes('[[图片测试]]')
             && String(activeTitle).trim() === '图片测试';
         } catch (err) {
@@ -3783,7 +3774,7 @@ function runSmoke() {
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
           && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk
-          && imgCaretOk && collapseOk && todoNoteOk && noteMultiOk && noteEnterOk
+          && imgCaretOk && collapseOk && todoArrowOk && noteMultiOk && noteStyleOk && noteEnterOk
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
@@ -3792,8 +3783,8 @@ function runSmoke() {
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
-          hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoNoteOk,
-          noteMultiOk, noteEnterOk,
+          hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoArrowOk,
+          noteMultiOk, noteStyleOk, noteEnterOk,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);

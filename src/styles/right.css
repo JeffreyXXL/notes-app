@@ -156,24 +156,8 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 .cm-todo{display:inline-block;vertical-align:middle}
 .cm-todo-done{text-decoration:line-through;text-decoration-thickness:1px;color:var(--t4)}
 
-/* 待办的「解决方式」：挂在待办下面的一块备注区，不再是跟在箭头后面的小字。
-   箭头只是语法上的分隔符，平时不显示 —— 光标进这一行时会整个露出源码，那时能改。
-   用 display:block 让它脱离行内流：标题留在上面一行，备注落到下面并撑成一个框 */
-.cm-todo-arrow{display:none}
-.cm-todo-note{
-  display:block;
-  /* 底部不留 margin：它和 .cm-line 的下边缘会折叠，那一两像素不会计入行高，
-     行高表又对不上了。上面那 7px 夹在两段之间，不会折叠，可以留着 */
-  margin:7px 0 0 22px;
-  padding:8px 11px;
-  border:1px solid var(--border);
-  border-radius:8px;
-  background:var(--hover-soft);
-  color:var(--t2);
-  font-size:.94em;
-  line-height:1.65;
-}
-/* 缩进写的备注（可以有很多行）：每一行都是一条 .cm-line，靠行装饰拼成一个连续的框 ——
+/* 待办的备注：写在待办下面、缩进两格（或一个 tab）的连续行，可以有很多行。
+   每一行都是一条 .cm-line，靠行装饰拼成一个连续的框 ——
    首行圆上角、末行圆下角、中间上下都不画线，看起来就是一块。
    上下留白一律用 padding：行高量的是元素自己的 rect，margin 不计入，
    会让下面每一行的坐标整体上移（就是「有图片之后光标不准」那个坑） */
@@ -187,7 +171,10 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
   border-right:1px solid var(--border);
   color:var(--t2);
   font-size:.94em;
-  line-height:1.65;
+  /* 行高要和框外面一模一样。正文是 --doc-lh × 1em，这里字号缩到了 .94em，
+     所以把倍数除回去 —— 乘出来还是同一个物理行高。不除的话字号一小，
+     行距跟着缩水，框里看着就比外面挤 */
+  line-height:calc(var(--doc-lh) / .94);
 }
 #editor-host .cm-line.cm-todonote-first{
   border-top:1px solid var(--border);
@@ -201,43 +188,16 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
   border-bottom-right-radius:8px;
   padding-bottom:8px !important;
 }
+/* 备注框和下面那段之间的空。挂在「下一行」的 padding-top 上：
+   挂到末行的 padding-bottom 只会把框本身撑高（padding 在边框里面），
+   框和下文还是贴着的 */
+#editor-host .cm-line.cm-todonote-gap{padding-top:10px !important}
 /* 标题行和下面那块备注之间的缝。用 padding 不用 margin，理由同上 */
 #editor-host .cm-line.cm-todo-withnote{padding-bottom:7px !important}
 
-/* 缩进写的备注（可以有很多行）：每一行都是一条 .cm-line，靠行装饰拼成一个连续的框 ——
-   首行圆上角、末行圆下角、中间上下都不画线，看起来就是一块。
-   上下留白一律用 padding：行高量的是元素自己的 rect，margin 不计入，
-   会让下面每一行的坐标整体上移（就是「有图片之后光标不准」那个坑） */
-#editor-host .cm-line.cm-todonote{
-  margin-left:22px;
-  margin-right:8px;
-  padding-left:11px !important;
-  padding-right:11px;
-  background:var(--hover-soft);
-  border-left:1px solid var(--border);
-  border-right:1px solid var(--border);
-  color:var(--t2);
-  font-size:.94em;
-  line-height:1.65;
-}
-#editor-host .cm-line.cm-todonote-first{
-  border-top:1px solid var(--border);
-  border-top-left-radius:8px;
-  border-top-right-radius:8px;
-  padding-top:8px !important;
-}
-#editor-host .cm-line.cm-todonote-last{
-  border-bottom:1px solid var(--border);
-  border-bottom-left-radius:8px;
-  border-bottom-right-radius:8px;
-  padding-bottom:8px !important;
-}
-/* 标题行和下面那块备注之间的缝。用 padding 不用 margin，理由同上 */
-#editor-host .cm-line.cm-todo-withnote{padding-bottom:7px !important}
-
-/* 还没写解决方式时行尾那个小「＋」，平时隐形，鼠标移到这一行才出现。
+/* 还没写备注时行尾那个小「＋」，平时隐形，鼠标移到这一行才出现。
    光 opacity:0 是不够的 —— 透明元素照样接收点击，行尾那 22px 就成了死区，
-   点下去会插一个「→」而不是把光标放到行尾。所以一并关掉命中测试，
+   点下去会新起一行备注而不是把光标放到行尾。所以一并关掉命中测试，
    只在真的显形时才接事件 */
 .cm-todonote-add{display:inline-block;width:16px;height:16px;line-height:15px;margin-left:6px;
   border-radius:5px;border:1px dashed var(--border);background:transparent;color:var(--t5);
