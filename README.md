@@ -95,7 +95,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo notes (indented lines join into one box, clicking one puts the caret on that line, Shift-Enter and Enter both break lines inside the note) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo notes (indented lines join into one box, clicking one puts the caret on that line, Shift-Enter and Enter both break lines inside the note, and `→` is demoted to ordinary text) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
@@ -154,9 +154,10 @@ A few assertions worth keeping:
 | `atomic=ok text="ZZa**粗**" col=5 key=handled` | One ArrowRight from after `a` **skips the whole `**`** and lands before 粗 (3→5); without atomic ranges it stops at 4, where nothing is visible |
 | `imgCaret=ok drift=0 posAt=86 head=86 range=85-98` | For the paragraph under an image: CM's line top matches the DOM (`drift=0`), looking a position up by coordinates finds that line (`posAt`), and a real click puts the caret there (`head`). All three fail when a block widget uses `margin` for spacing |
 | `collapse=ok cls="app" l=238 m=342` | Both left panes are expanded on startup (`.app` carries neither `no-left` nor `no-mid`, and both have real width) |
-| `todoNote=ok head=62 line=44-77` | The arrow-style note is a block under the title (`display:block`, bordered, left edge right of the title text), and clicking it puts the caret on the todo line |
+| `todoArrow=ok` | The arrow is no longer syntax: zero `.cm-todo-note` / `.cm-todo-arrow` in the note, the `→` line renders as plain text (`textContent` contains `→`), only the indented one is boxed, and the trailing `＋` shows on exactly the two todos without a note |
 | `noteMulti=ok n=2 first="…cm-todonote-first" last="…cm-todonote-last"` | Two indented note lines form **one** box: the first carries only `-first`, the last only `-last`, both have a background and side borders; clicking the last line puts the caret on it |
 | `noteEnter=ok s1=prevented s2=prevented tail="- [ ] 甲\n  备注一\n  备注二"` | Shift-Enter starts a note line, Enter breaks a line inside the note, indentation carried over — the note is **multi-line** |
+| `noteStyle=ok {"noteLh":27.55,"bodyLh":27.55,"gapPad":"10px"}` | The note's line height measures the same pixel value as the body (it used to be hard-coded at `1.65`, tighter than the body); the line under the box carries `cm-todonote-gap` with `padding-top: 10px` |
 | `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
 | `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
@@ -320,11 +321,12 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - **Shift-Enter** starts a note line directly under a todo, without tabbing first.
 - The faint `＋` at the end of the todo line does the same thing: one click adds a line below.
 - `[[notes]]` inside the note are clickable, and inline markup (`**bold**`, `` `code` ``) still renders normally.
+- **Line spacing inside the box matches the body exactly** (it follows the line-height setting), and there is a gap
+  below the box so it never touches the next paragraph.
 - Checking the todo strikes through only the title — the note isn't part of "the todo".
-- The older `- [ ] title → note` form is still recognized (one line only, boxed under the title), but **prefer the
-  indented form**: the arrow form breaks as soon as you need a second line.
+- The arrow (`→` / `->`) is **no longer syntax**: it is plain text now, so writing `- [ ] title → note` by hand no
+  longer produces a second box. Put the note on the next line, indented.
 - A todo without a note shows a faint `＋` at the end of the line: it appears on hover, and clicking it adds an indented note line below.
-- `->` works too; you don't have to type the full-width arrow.
 
 **Card previews**
 - Each card in the middle pane shows "an excerpt + thumbnails from the body". Excerpts are at most two lines, truncated beyond that.

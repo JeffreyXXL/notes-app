@@ -1223,6 +1223,7 @@ function buildDecorations(view: EditorView): Decorations {
   // 先扫一遍建表 —— 渲染标题行时要立刻知道自己有没有备注（决定还显不显示行尾的「＋」）
   const noteLinesOf = new Map<number, number[]>();  // 标题行号 -> 备注行号
   const noteOwner = new Map<number, number>();      // 备注行号 -> 标题行号
+  const noteGap = new Set<number>();                // 紧跟在备注框后面的那行
   {
     const isTodo = (t: string) => /^\s*[-*+]\s+\[[ xX]\]\s+/.test(t);
     const isItem = (t: string) => /^\s*(?:[-*+]|\d+\.)\s+/.test(t);
@@ -1242,6 +1243,10 @@ function buildDecorations(view: EditorView): Decorations {
       if (lines.length) {
         noteLinesOf.set(i, lines);
         for (const j of lines) noteOwner.set(j, i);
+        // 框下面要留点空。留白只能加在「下一行」的 padding-top 上 ——
+        // 加到末行的 padding-bottom 只会把框撑高，框和下文还是贴着
+        const next = lines[lines.length - 1] + 1;
+        if (next <= doc.lines) noteGap.add(next);
       }
     }
   }
@@ -1279,6 +1284,9 @@ function buildDecorations(view: EditorView): Decorations {
     const text = line.text;
     // 光标所在行露出源码
     const active = focused && reveal && i >= aFrom && i <= aTo;
+
+    // 上一行是备注框的末行：给这一行加个上留白，别和框贴在一起
+    if (noteGap.has(i)) out.push(lineDeco('cm-todonote-gap').range(line.from));
 
     // 代码块：光标在块内就露出源码（围栏行 + 中间行都上等宽样式），否则整块交给 codeField
     const cb = codeMap.get(i);
@@ -1365,12 +1373,6 @@ function buildDecorations(view: EditorView): Decorations {
         const checked = m[3].toLowerCase() === 'x';
         const bodyFrom = line.from + m[0].length;
 
-        // 解决方式写在箭头后面：
-        // `- [ ] 修一下登录 → 换成新的 token 校验 [[登录改造]]`
-        const am = /(?:→|->)/.exec(text.slice(m[0].length));
-        const arrow = am ? m[0].length + am.index : -1;
-        const arrowLen = am ? am[0].length : 0;
-
         // 这一条有没有缩进的备注行。有的话：光标落在任意一行都要整条露源码，
         // 标题行下面留一道缝（用 padding，不是 margin），行尾也不再显「＋」
         const notes = noteLinesOf.get(i);
@@ -1380,25 +1382,14 @@ function buildDecorations(view: EditorView): Decorations {
         if (!itemActive) {
           pushReplaced(new TodoWidget(checked, bracket), start, line.from + m[0].length);
 
-          // 删除线必须在行内标记之前 push：同一 from 时长范围要先入。
-          // 划掉的范围到箭头为止 —— 解决方式不是「待办本身」，不该跟着划掉
-          const strikeTo = arrow >= 0 ? line.from + arrow : line.to;
-          if (checked && strikeTo > bodyFrom) {
-            out.push(Decoration.mark({ class: 'cm-todo-done' }).range(bodyFrom, strikeTo));
+          // 删除线必须在行内标记之前 push：同一 from 时长范围要先入
+          if (checked && line.to > bodyFrom) {
+            out.push(Decoration.mark({ class: 'cm-todo-done' }).range(bodyFrom, line.to));
           }
 
-          if (arrow >= 0) {
-            out.push(Decoration.mark({ class: 'cm-todo-arrow' })
-              .range(line.from + arrow, line.from + arrow + arrowLen));
-            // 箭头后面那个空格不算备注的一部分：箭头本身不显示，
-            // 空格留着的话框里的文字会平白多缩进一格
-            let noteFrom = line.from + arrow + arrowLen;
-            while (noteFrom < line.to && /\s/.test(state.doc.sliceString(noteFrom, noteFrom + 1))) noteFrom++;
-            if (line.to > noteFrom) {
-              out.push(Decoration.mark({ class: 'cm-todo-note' }).range(noteFrom, line.to));
-            }
-          } else if (line.to > line.from && !notes) {
-            // 缩进写备注时，行尾的「＋」不再需要（它本身也改成插一行缩进）
+          // 备注只认缩进的行。以前还认 `→ 备注` 写在行尾，一行就写死了，
+          // 现在彻底去掉 —— 箭头按普通文字渲染，想写备注就在下面缩进
+          if (line.to > line.from && !notes) {
             const lead = /^[ \t]*/.exec(text)![0];
             out.push(Decoration.widget({ widget: new TodoNoteWidget(line.to, lead + '  '), side: 1 })
               .range(line.to));
