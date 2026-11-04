@@ -2361,6 +2361,7 @@ function runSmoke() {
 
         let codeOk = false;
         let linkOk = false;
+        let versionOk = false;
         let cardPathOk = false;
         let leftOrderOk = false;
         let pruneOk = false;
@@ -2646,8 +2647,9 @@ function runSmoke() {
           console.log('SMOKE linkShot=' + (await saveShot('note-links.png')));
           win.hide();
 
-          // 平点一下 `[[图片测试]]`：光标要落进这一行，不能跳走。
-          // 以前平点就跳转，等于带链接的行整行都点不进光标 —— 就是用户报的那个
+          // 链接有两件事都得成立：
+          //   ① 点这一行的**空白处**，光标要进得来（带链接的行不能整行点不动）
+          //   ② 平点链接文字本身，直接跳转（以前只认 Ctrl+点，等于「链接点不了」）
           const linkPt = () => js(`(()=>{
             const a = document.querySelector('.cm-wikilink');
             if (!a) return null;
@@ -2655,14 +2657,30 @@ function runSmoke() {
             const r = a.getBoundingClientRect();
             return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
           })()`);
-          await clickAt(await linkPt());
-          const wikiCaret = String(await js(`(()=>{
-            const s = getSelection();
-            const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
-            const line = el && el.closest ? el.closest('.cm-line') : null;
-            return line ? line.textContent : '';
-          })()`));
-          console.log('SMOKE wikiCaret=' + JSON.stringify(wikiCaret.slice(0, 26)));
+          // 同一行的左边缘：正文第一个字，肯定不在链接上
+          const blankPt = () => js(`(()=>{
+            const a = document.querySelector('.cm-wikilink');
+            if (!a) return null;
+            const l = a.closest('.cm-line');
+            if (!l) return null;
+            const r = l.getBoundingClientRect();
+            return { x: Math.round(r.left + 8), y: Math.round(r.top + r.height / 2) };
+          })()`);
+          const headBefore = Number(await js('(() => window.__editor.state.selection.main.head)()'));
+          await clickAt(await blankPt());
+          const headAfter = Number(await js('(() => window.__editor.state.selection.main.head)()'));
+          // 链接所在那一行在文档里的范围（用 doc 查，别拿 DOM 反推）
+          const wikiLine = JSON.parse(String(await js(`(()=>{
+            const ed = window.__editor;
+            for (let n = 1; n <= ed.state.doc.lines; n++) {
+              const l = ed.state.doc.line(n);
+              if (l.text.includes('[[图片测试]]')) return JSON.stringify({ n, from: l.from, to: l.to });
+            }
+            return JSON.stringify({ n: -1, from: -1, to: -1 });
+          })()`)));
+          console.log('SMOKE wikiClick=' + JSON.stringify({
+            before: headBefore, after: headAfter, line: wikiLine
+          }));
 
           // 光标挪开这一行，链接才会重新渲染成可点的样子
           const headPt = await js(`(()=>{
@@ -2674,24 +2692,21 @@ function runSmoke() {
           await clickAt(headPt);
           await wait(300);
 
-          // Ctrl+点才是打开链接
-          const lp2 = await linkPt();
-          if (lp2) {
-            win.webContents.sendInputEvent({
-              type: 'mouseDown', x: lp2.x, y: lp2.y, button: 'left',
-              clickCount: 1, modifiers: ['control']
-            });
-            win.webContents.sendInputEvent({
-              type: 'mouseUp', x: lp2.x, y: lp2.y, button: 'left',
-              clickCount: 1, modifiers: ['control']
-            });
-            await wait(700);
-          }
+          // 平点链接（不带任何修饰键）就该跳走
+          await clickAt(await linkPt());
           const activeTitle = await js("(document.querySelector('.card.active h4') || {}).textContent || ''");
           console.log('SMOKE linkJump=' + JSON.stringify(activeTitle));
 
+          // 版本号：界面上显示的必须和 package.json 里的一致
+          const verText = String(await js("(document.getElementById('app-version') || {}).textContent || ''"));
+          versionOk = verText === 'v' + app.getVersion();
+          console.log('SMOKE version=' + (versionOk ? 'ok' : 'bad') +
+            ' ' + JSON.stringify({ verText, app: app.getVersion() }));
+
+          // 点空白处：光标要落进这一行（带链接的行不能整行点不进）
+          // 平点链接文字：直接跳走（不带修饰键）
           linkOk = li.wiki === 2 && li.todo === 3 && li.add === 2
-            && wikiCaret.includes('[[图片测试]]')
+            && wikiLine.n > 0 && headAfter >= wikiLine.from && headAfter <= wikiLine.to
             && String(activeTitle).trim() === '图片测试';
         } catch (err) {
           console.log('SMOKE linkFailed=' + err.message);
@@ -3769,7 +3784,7 @@ function runSmoke() {
           && blankOk && imgOk && imgPickOk && imgBoxOk && imgResizeOk && imgEditOk && imgPasteOk
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
-          && hideOk && lockOk && appNameOk && thumbRowOk && figsOk && placeholderOk
+          && hideOk && lockOk && appNameOk && versionOk && thumbRowOk && figsOk && placeholderOk
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
@@ -3780,7 +3795,7 @@ function runSmoke() {
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
-          hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
+          hideOk, lockOk, appNameOk, versionOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
           hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoArrowOk,
