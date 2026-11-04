@@ -11,7 +11,9 @@ import {
   codeBlocksField, codeField, linkPlugin, setLinkHandler
 } from './live-preview';
 import type { LinkKind } from './live-preview';
-import { toggleWrap, highlightDefault, continueMarkup, indentBlock } from './commands';
+import {
+  toggleWrap, highlightDefault, continueMarkup, newNoteLine, indentBlock
+} from './commands';
 import { insertImages, imageFilesFrom } from './image-insert';
 
 export type { EditorView } from '@codemirror/view';
@@ -104,6 +106,9 @@ export function mount(
           // 回车续格式：待办 / 列表 / 引用。不归它管时返回 false，
           // 继续落到下面的 insertNewlineAndIndent
           { key: 'Enter', run: continueMarkup },
+          // Shift-Enter：在待办下面新起一行备注。备注可以有很多行，
+          // 回车只管「下一条待办」，换行归 Shift-Enter
+          { key: 'Shift-Enter', run: newNoteLine },
           // Tab / Shift-Tab 缩进。defaultKeymap 里没有 Tab，不显式绑的话
           // 按键会跑出去切焦点 —— 用户看到的就是「Tab 不能用」
           { key: 'Tab', run: v => indentBlock(v, 1) },

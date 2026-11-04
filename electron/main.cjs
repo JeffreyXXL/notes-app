@@ -971,7 +971,11 @@ function prepareSmokeFixtures() {
     '# 链接与待办', '',
     '点这里跳到 [[图片测试]]。', '',
     '- [ ] 还没写解决方式的任务',
-    '- [x] 已经写了的任务 → 换成新方案，见 [[换行符测试]]', ''
+    '- [x] 已经写了的任务 → 换成新方案，见 [[换行符测试]]',
+    // 缩进写的备注：可以有好几行。老写法（箭头后面一行）也留着，两种都要能渲染
+    '- [ ] 缩进写的备注，可以有好几行',
+    '  第一行：换掉旧的 token 校验',
+    '  第二行：加上重试和超时', ''
   ].join('\n');
 
   try {
@@ -1132,6 +1136,10 @@ function runSmoke() {
         let imgCaretOk = false;
         let collapseOk = false;
         let todoNoteOk = false;
+        // 第 57 轮：备注改成「待办下面缩进的行」，可以有很多行；
+        // 回车在备注里换行，Shift-Enter 起一行
+        let noteMultiOk = false;
+        let noteEnterOk = false;
         let blockClickOk = false;
         let plusHitOk = false;
         let qbEndOk = false;
@@ -2579,6 +2587,67 @@ function runSmoke() {
             console.log('SMOKE todoNoteFailed=' + err.message);
           }
 
+          // 缩进写的备注：两行拼成一块 —— 首行圆上角、末行圆下角，中间不画线。
+          // 以前备注只能写在箭头后面，一行写完就断了，换行就散架
+          try {
+            const nm = JSON.parse(String(await js(`(()=>{
+              const ns = [...document.querySelectorAll('#editor-host .cm-todonote')];
+              if (ns.length < 2) return JSON.stringify({ err: 'n', n: ns.length });
+              const first = ns[0], last = ns[ns.length - 1];
+              const cs = getComputedStyle(first);
+              const r = last.getBoundingClientRect();
+              return JSON.stringify({
+                n: ns.length,
+                firstCls: String(first.className),
+                lastCls: String(last.className),
+                bg: cs.backgroundColor,
+                bl: cs.borderLeftWidth,
+                bt: getComputedStyle(last).borderBottomWidth,
+                firstText: String(first.textContent),
+                lastText: String(last.textContent),
+                x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2)
+              });
+            })()`)));
+            if (nm.err) throw new Error('备注行只有 ' + nm.n + ' 行');
+
+            // 点最后一行：光标要落在这一行上（整条一起露源码，但位置得对）
+            await clickAt({ x: nm.x, y: nm.y });
+            const head = Number(await js('(() => window.__editor.state.selection.main.head)()'));
+            const lastLine = JSON.parse(String(await js(`(()=>{
+              const ed = window.__editor;
+              for (let n = 1; n <= ed.state.doc.lines; n++) {
+                const l = ed.state.doc.line(n);
+                if (l.text.includes('第二行')) return JSON.stringify({ from: l.from, to: l.to });
+              }
+              return JSON.stringify({ from: -1, to: -1 });
+            })()`)));
+
+            noteMultiOk = nm.n === 2
+              && /cm-todonote-first/.test(nm.firstCls) && !/cm-todonote-last/.test(nm.firstCls)
+              && /cm-todonote-last/.test(nm.lastCls) && !/cm-todonote-first/.test(nm.lastCls)
+              && nm.bg !== 'rgba(0, 0, 0, 0)' && nm.bl !== '0px' && nm.bt !== '0px'
+              && String(nm.firstText).startsWith('第一行')
+              && String(nm.lastText).startsWith('第二行')
+              && head >= lastLine.from && head <= lastLine.to;
+            console.log('SMOKE noteMulti=' + (noteMultiOk ? 'ok' : 'bad') +
+              ' n=' + nm.n + ' first=' + JSON.stringify(nm.firstCls) +
+              ' last=' + JSON.stringify(nm.lastCls) + ' bg=' + nm.bg +
+              ' bl=' + nm.bl + ' bt=' + nm.bt +
+              ' head=' + head + ' line=' + lastLine.from + '-' + lastLine.to);
+
+            // 复位：点回标题，整条重新渲染成卡片
+            const back = await js(`(()=>{
+              const l = document.querySelector('#editor-host .cm-line');
+              if (!l) return null;
+              const r = l.getBoundingClientRect();
+              return { x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            if (back) await clickAt(back);
+            await wait(400);
+          } catch (err) {
+            console.log('SMOKE noteMultiFailed=' + err.message);
+          }
+
           // 截图：待办的「→ 解决方式」和行尾的「＋」
           win.showInactive();
           await wait(600);
@@ -3231,6 +3300,77 @@ function runSmoke() {
           }));
           enterOk = typed === 'ok' && keysOk && body.endsWith(want);
 
+          // (c1b) 备注的换行：Shift-Enter 在待办下面起一行，回车在备注里继续换行。
+          // 以前备注只能写在 `→` 后面，一行写完就没了 —— 用户要的就是这个「换行」
+          try {
+            const pressKey = shift => js(`(() => {
+              const c = document.querySelector('#editor-host .cm-content');
+              if (!c) return 'nocontent';
+              const ev = new KeyboardEvent('keydown', {
+                key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+                shiftKey: ${shift ? 'true' : 'false'},
+                bubbles: true, cancelable: true
+              });
+              return c.dispatchEvent(ev) ? 'passed' : 'prevented';
+            })()`);
+
+            // 光标放到「- [ ] 甲」这一行的行尾
+            const putEnd = await js(`(() => {
+              const ed = window.__editor;
+              for (let n = 1; n <= ed.state.doc.lines; n++) {
+                const l = ed.state.doc.line(n);
+                if (l.text.includes('甲')) {
+                  ed.dispatch({ selection: { anchor: l.to } });
+                  ed.focus();
+                  return l.text;
+                }
+              }
+              return 'noline';
+            })()`);
+            await wait(300);
+            const s1 = await pressKey(true);     // Shift-Enter → 缩进的新行
+            await wait(250);
+            await typeText('备注一');
+            await wait(250);
+            const s2 = await pressKey(false);    // 备注里回车 → 还是缩进的新行
+            await wait(250);
+            await typeText('备注二');
+            await wait(1500);
+
+            const body2 = editFile ? readFile(editFile) : '';
+            const want2 = '- [ ] 甲\n  备注一\n  备注二';
+            noteEnterOk = String(putEnd) === '- [ ] 甲'
+              && s1 === 'prevented' && s2 === 'prevented'
+              && body2.includes(want2);
+            console.log('SMOKE noteEnter=' + (noteEnterOk ? 'ok' : 'bad') +
+              ' s1=' + s1 + ' s2=' + s2 + ' tail=' + JSON.stringify(body2.slice(-40)));
+
+            // 收尾：把刚插进去的两行备注删掉，光标放回文末 ——
+            // 后面的 Tab / 高亮用例接着用这篇笔记，不能留下半截状态
+            // 收尾：把正文整个写回刚才那份内容，光标放回文末 ——
+            // 后面的 Tab / 高亮用例接着用这篇笔记，不能留下半截状态
+            const cleaned = String(await js(`(() => {
+              try {
+                const ed = window.__editor;
+                if (!ed) return 'noeditor';
+                const doc = ed.state.doc;
+                const body = ${JSON.stringify(want)};
+                ed.dispatch({
+                  changes: { from: 0, to: doc.length, insert: body },
+                  selection: { anchor: body.length }
+                });
+                return 'ok';
+              } catch (e) {
+                return 'err:' + (e && e.message ? e.message : e);
+              }
+            })()`));
+            console.log('SMOKE noteClean=' + cleaned);
+            await wait(1500);
+          } catch (err) {
+            console.log('SMOKE noteEnterFailed=' + err.message);
+          }
+
+
           // (c2) Tab / Shift-Tab 缩进。
           // defaultKeymap 里没有 Tab，不显式绑的话按键会跑出去切焦点 ——
           // 用户看到的就是「Tab 不能用」。先在空行上按 Tab，缩进就落在行首，
@@ -3643,7 +3783,7 @@ function runSmoke() {
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
           && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk
-          && imgCaretOk && collapseOk && todoNoteOk
+          && imgCaretOk && collapseOk && todoNoteOk && noteMultiOk && noteEnterOk
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
@@ -3653,6 +3793,7 @@ function runSmoke() {
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
           hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoNoteOk,
+          noteMultiOk, noteEnterOk,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);

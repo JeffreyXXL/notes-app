@@ -525,6 +525,46 @@ function inCodeBlock(state: EditorState, lineNumber: number): boolean {
  * 返回 false 表示「这次回车不归我管」，让 defaultKeymap 里的
  * insertNewlineAndIndent 接着处理。
  */
+/**
+ * 这一行是不是「待办下面的备注行」：本行有缩进，往上跳过同样缩进的行，
+ * 第一条不缩进的行是待办就算。
+ */
+function isTodoNoteLine(state: EditorState, n: number): boolean {
+  for (let k = n - 1; k >= 1; k--) {
+    const t = state.doc.line(k).text;
+    if (!t.trim()) return false;
+    if (/^\s*[-*+]\s+\[[ xX]\]\s+/.test(t)) return true;
+    if (!/^(?: {2,}|\t)/.test(t)) return false;
+  }
+  return false;
+}
+
+/**
+ * 在待办这一条里新起一行备注（Shift-Enter，以及备注行上的回车）。
+ *
+ * 备注就是待办下面缩进的行，可以有任意多行 —— 这才叫「换行」。
+ * 以前备注只能写在 `→` 后面，一行写完就没了，所以这个命令以前不存在。
+ */
+export function newNoteLine(view: EditorView): boolean {
+  if (view.composing) return false;
+  const state = view.state;
+  const sel = state.selection.main;
+  const line = state.doc.lineAt(sel.to);
+  const text = line.text;
+  const lead = /^[ \t]*/.exec(text)![0];
+  const isTodo = /^\s*[-*+]\s+\[[ xX]\]\s+/.test(text);
+  const isNote = !isTodo && lead.length > 0 && isTodoNoteLine(state, line.number);
+  if (!isTodo && !isNote) return false;
+
+  const indent = isTodo ? lead + '  ' : lead;
+  const insert = '\n' + indent;
+  view.dispatch({
+    changes: { from: line.to, insert },
+    selection: { anchor: line.to + insert.length }
+  });
+  return true;
+}
+
 export function continueMarkup(view: EditorView): boolean {
   // 输入法正在组合时，回车是「确认候选词」而不是换行。
   // CodeMirror 自己也会挡一道，但中文输入是主要用法，这里再明确拦一次
@@ -545,7 +585,27 @@ export function continueMarkup(view: EditorView): boolean {
   const indent = /^[ \t]*/.exec(text)![0];
   const rest = text.slice(indent.length);
   const mk = markupOf(rest);
-  if (!mk) return false;
+  if (!mk) {
+    // 备注行：回车就是备注里换行，缩进照抄，还在这一条里。
+    // 不接管的话会掉回 insertNewlineAndIndent，新行没有缩进 —— 备注当场断掉
+    if (indent.length > 0 && isTodoNoteLine(state, line.number)) {
+      // 空的备注行再回车 = 这段备注到此为止：清掉缩进，这一行回到正文
+      if (!rest.trim()) {
+        view.dispatch({
+          changes: { from: line.from, to: line.to, insert: '' },
+          selection: { anchor: line.from }
+        });
+        return true;
+      }
+      const insert = '\n' + indent;
+      view.dispatch({
+        changes: { from: sel.from, insert },
+        selection: { anchor: sel.from + insert.length }
+      });
+      return true;
+    }
+    return false;
+  }
 
   // 这一条已经是空的：回车 = 结束列表，把整行清空，别再生成下一条
   if (!rest.slice(mk.raw.length).trim()) {

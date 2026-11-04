@@ -95,7 +95,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo resolutions (the note drops into a box below the title, and clicking it puts the caret on that line) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo notes (indented lines join into one box, clicking one puts the caret on that line, Shift-Enter and Enter both break lines inside the note) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
@@ -106,7 +106,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 | `desktop-image.png` | Image in the body (full window) |
 | `image-resize.png` | Selected image: outline + size toolbar + drag handle |
 | `code-block.png` | Code block: language label + syntax colors + copy button |
-| `note-links.png` | Internal links + todos (title on one line, resolution in a box below) |
+| `note-links.png` | Internal links + todos (title on one line, the note drops into a box below, several lines form one box) |
 | `card-multi.png` | Multi-image card preview (three different aspect ratios sharing a row) |
 | `lock-screen.png` | Password lock screen |
 | `desktop-window.png` / `tag-colors.png` | Default UI / tag colors |
@@ -140,7 +140,7 @@ A few assertions worth keeping:
 | `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | Both code blocks render, the language label is right, keywords / strings / comments / function names are colored; **a table inside a code block is not treated as a table** |
 | `codeClick=1/2` | **A single click drops the cursor into the code block** (one block fewer, two fence lines more). It used to do nothing at all, which users reported as "these lines can't be clicked" |
 | `blockClick=ok {"blocks":0,"fences":2}` | Same thing, verified independently on another note |
-| `link={"wiki":2,"note":1,"add":1}` | Two internal links / one todo resolution / one `＋` button |
+| `link={"wiki":2,"note":1,"add":1}` | Two internal links / one arrow-style note / one `＋` button |
 | `wikiCaret="点这里跳到 [[图片测试]]。"` | **A plain click on a link drops the caret in that line** instead of navigating |
 | `linkJump="图片测试"` | **Ctrl + click** on `[[图片测试]]` is what actually navigates (verified via the selected card in the middle pane) |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
@@ -154,7 +154,9 @@ A few assertions worth keeping:
 | `atomic=ok text="ZZa**粗**" col=5 key=handled` | One ArrowRight from after `a` **skips the whole `**`** and lands before 粗 (3→5); without atomic ranges it stops at 4, where nothing is visible |
 | `imgCaret=ok drift=0 posAt=86 head=86 range=85-98` | For the paragraph under an image: CM's line top matches the DOM (`drift=0`), looking a position up by coordinates finds that line (`posAt`), and a real click puts the caret there (`head`). All three fail when a block widget uses `margin` for spacing |
 | `collapse=ok cls="app" l=238 m=342` | Both left panes are expanded on startup (`.app` carries neither `no-left` nor `no-mid`, and both have real width) |
-| `todoNote=ok head=62 line=44-77` | The todo resolution is a block under the title (`display:block`, bordered, left edge right of the title text), and clicking it puts the caret on the todo line |
+| `todoNote=ok head=62 line=44-77` | The arrow-style note is a block under the title (`display:block`, bordered, left edge right of the title text), and clicking it puts the caret on the todo line |
+| `noteMulti=ok n=2 first="…cm-todonote-first" last="…cm-todonote-last"` | Two indented note lines form **one** box: the first carries only `-first`, the last only `-last`, both have a background and side borders; clicking the last line puts the caret on it |
+| `noteEnter=ok s1=prevented s2=prevented tail="- [ ] 甲\n  备注一\n  备注二"` | Shift-Enter starts a note line, Enter breaks a line inside the note, indentation carried over — the note is **multi-line** |
 | `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
 | `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
@@ -300,20 +302,28 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - The quick bar has two link buttons: one inserts an external link `[text](url)`, one inserts an internal link `[[folder/note name]]`.
 - To edit the link text: click the link itself — the caret lands in the text and that span reverts to `[[…]]` source (other markup on the line is unaffected).
 
-**Todo resolutions**
-- Each todo can carry a "how this gets solved" note after an arrow:
+**Todo notes**
+- A note goes **under** the todo, indented two spaces (or one tab), and can be as many lines as you like:
 
   ```markdown
-  - [ ] login fails intermittently → replace the old token check, see [[login rework]]
-  - [x] export is too slow → switch to streaming, see https://example.com/stream
+  - [ ] login fails intermittently
+    replace the old token check, see [[login rework]]
+    then add a retry with a timeout
+  - [x] export is too slow
+    switch to streaming, see https://example.com/stream
   ```
 
-- It renders as a block: the todo title keeps its own line, and the resolution drops below it into a lightly bordered
-  box whose left edge lines up with the title text. The arrow is only a syntax separator and **is not shown** — put the
-  caret on the line and the whole line reverts to source, which is where you edit it.
-- `[[notes]]` inside the box are clickable, and inline markup (bold, code) still renders normally.
-- Checking the todo strikes through only up to the arrow — the resolution isn't part of "the todo".
-- A todo without a resolution shows a faint `＋` at the end of the line: it appears on hover, and clicking it inserts `→ ` and puts the cursor after it.
+- It renders as one block: the title keeps its own line, and the indented lines below it are drawn as a single lightly
+  bordered box whose left edge lines up with the title text — several lines are **one** box, not one box per line.
+- **Enter inside the note is a line break**, and the indentation is carried over. Enter on an empty note line ends the
+  note and puts you back in the body.
+- **Shift-Enter** starts a note line directly under a todo, without tabbing first.
+- The faint `＋` at the end of the todo line does the same thing: one click adds a line below.
+- `[[notes]]` inside the note are clickable, and inline markup (`**bold**`, `` `code` ``) still renders normally.
+- Checking the todo strikes through only the title — the note isn't part of "the todo".
+- The older `- [ ] title → note` form is still recognized (one line only, boxed under the title), but **prefer the
+  indented form**: the arrow form breaks as soon as you need a second line.
+- A todo without a note shows a faint `＋` at the end of the line: it appears on hover, and clicking it adds an indented note line below.
 - `->` works too; you don't have to type the full-width arrow.
 
 **Card previews**
@@ -366,7 +376,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 **Todos**
 - `- [ ] something` becomes a checkbox; clicking it checks it and strikes through the text.
 - The checked state is written straight back to the file (`- [x] something`).
-- Each can carry a `→ resolution`, see "Todo resolutions" above.
+- Each can carry an indented note below it (as many lines as you like), see "Todo notes" above.
 
 **Finding things**
 - `Ctrl/Cmd + K` focuses the search box and searches as you type. Title, body, tags and folder all participate; title hits rank first.
@@ -597,7 +607,7 @@ Body…
 - Delete means `trashed: true` — the file is still there. Emptying the trash is what really deletes.
 - "重建索引" (rebuild index) rescans the directory; click it any time.
 - Three plain-text extensions show up as ordinary text in other editors and don't affect reading:
-  `[[another note]]` (internal link), trailing `{width=320}` (image width), and `→ resolution` after a todo.
+  `[[another note]]` (internal link), trailing `{width=320}` (image width), and an indented note under a todo.
 - Folder order / tag order / app name / password digest live in `settings.json`, not in `.md` files — they are preferences about
   "how this vault is arranged, how this app looks", not the content of any one note.
 

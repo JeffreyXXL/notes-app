@@ -76,14 +76,16 @@ class TodoWidget extends WidgetType {
  * 只在还没写解决方式时出现，鼠标移到这一行才显形，平时不占注意力。
  */
 class TodoNoteWidget extends WidgetType {
-  constructor(readonly pos: number) { super(); }
-  override eq(o: TodoNoteWidget): boolean { return o.pos === this.pos; }
+  constructor(readonly pos: number, readonly indent: string) { super(); }
+  override eq(o: TodoNoteWidget): boolean {
+    return o.pos === this.pos && o.indent === this.indent;
+  }
 
   override toDOM(view: EditorView): HTMLElement {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'cm-todonote-add';
-    b.title = '写解决方式（也可以直接写 [[另一篇笔记]]）';
+    b.title = '写备注（回车换行，也可以放 [[另一篇笔记]]）';
     b.textContent = '＋';
     ['mousedown', 'mouseup', 'click'].forEach(t =>
       b.addEventListener(t, e => e.stopPropagation()));
@@ -91,9 +93,12 @@ class TodoNoteWidget extends WidgetType {
     b.addEventListener('click', e => {
       e.preventDefault();
       const p = Math.min(this.pos, view.state.doc.length);
+      // 下面新起一行、缩进两格 —— 这一行就是备注的第一行。
+      // 以前这里插的是「→ 」，只能写一行，换行就断了
+      const insert = '\n' + this.indent;
       view.dispatch({
-        changes: { from: p, insert: ' → ' },
-        selection: { anchor: p + 3 }
+        changes: { from: p, insert },
+        selection: { anchor: p + insert.length }
       });
       view.focus();
     });
@@ -1214,6 +1219,33 @@ function buildDecorations(view: EditorView): Decorations {
   const out: Range<Decoration>[] = [];
   const atomics: Range<Decoration>[] = [];
 
+  // 待办的备注：写在待办下面、缩进两格（或一个 tab）的连续行。
+  // 先扫一遍建表 —— 渲染标题行时要立刻知道自己有没有备注（决定还显不显示行尾的「＋」）
+  const noteLinesOf = new Map<number, number[]>();  // 标题行号 -> 备注行号
+  const noteOwner = new Map<number, number>();      // 备注行号 -> 标题行号
+  {
+    const isTodo = (t: string) => /^\s*[-*+]\s+\[[ xX]\]\s+/.test(t);
+    const isItem = (t: string) => /^\s*(?:[-*+]|\d+\.)\s+/.test(t);
+    for (let i = 1; i <= doc.lines; i++) {
+      if (!isTodo(doc.line(i).text)) continue;
+      const lines: number[] = [];
+      for (let j = i + 1; j <= doc.lines; j++) {
+        const t = doc.line(j).text;
+        // 空行结束这一条
+        if (!t.trim()) break;
+        // 没缩进 = 另一段，不是备注
+        if (!/^(?: {2,}|\t)/.test(t)) break;
+        // 缩进的列表 / 待办是嵌套结构，不当备注
+        if (isItem(t)) break;
+        lines.push(j);
+      }
+      if (lines.length) {
+        noteLinesOf.set(i, lines);
+        for (const j of lines) noteOwner.set(j, i);
+      }
+    }
+  }
+
   // 被藏掉的标记：既要进 deco 去渲染，也要进 atomics 让光标跳过。
   // 漏掉后者的话，光标能停在这些位置上 —— 屏幕上什么都没有，按方向键像卡住
   const pushHidden = (from: number, to: number) => {
@@ -1261,6 +1293,25 @@ function buildDecorations(view: EditorView): Decorations {
       continue;
     }
     if (!text) continue;
+
+    // 待办备注行：整行属于上面那条待办。光标只要落在这一条的任何一行上，
+    // 整条（标题 + 备注）一起露源码 —— 只露一半会更难改
+    const owner = noteOwner.get(i);
+    if (owner != null) {
+      const lines = noteLinesOf.get(owner)!;
+      const last = lines[lines.length - 1];
+      const act = focused && reveal && aTo >= owner && aFrom <= last;
+      if (!act) {
+        const indent = /^[ \t]*/.exec(text)![0].length;
+        pushHidden(line.from, line.from + indent);
+        const cls = 'cm-todonote'
+          + (i === lines[0] ? ' cm-todonote-first' : '')
+          + (i === last ? ' cm-todonote-last' : '');
+        out.push(lineDeco(cls).range(line.from));
+        inline(out, atomics, line.from, indent, text, -1);
+      }
+      continue;
+    }
 
     if (/^\s*(?:---|\*\*\*|___)\s*$/.test(text)) {
       if (!active) pushHidden(line.from, line.to);
@@ -1320,7 +1371,13 @@ function buildDecorations(view: EditorView): Decorations {
         const arrow = am ? m[0].length + am.index : -1;
         const arrowLen = am ? am[0].length : 0;
 
-        if (!active) {
+        // 这一条有没有缩进的备注行。有的话：光标落在任意一行都要整条露源码，
+        // 标题行下面留一道缝（用 padding，不是 margin），行尾也不再显「＋」
+        const notes = noteLinesOf.get(i);
+        const itemActive = active
+          || (!!notes && focused && reveal && aTo >= i && aFrom <= notes[notes.length - 1]);
+
+        if (!itemActive) {
           pushReplaced(new TodoWidget(checked, bracket), start, line.from + m[0].length);
 
           // 删除线必须在行内标记之前 push：同一 from 时长范围要先入。
@@ -1340,12 +1397,14 @@ function buildDecorations(view: EditorView): Decorations {
             if (line.to > noteFrom) {
               out.push(Decoration.mark({ class: 'cm-todo-note' }).range(noteFrom, line.to));
             }
-          } else if (line.to > line.from) {
-            out.push(Decoration.widget({ widget: new TodoNoteWidget(line.to), side: 1 })
+          } else if (line.to > line.from && !notes) {
+            // 缩进写备注时，行尾的「＋」不再需要（它本身也改成插一行缩进）
+            const lead = /^[ \t]*/.exec(text)![0];
+            out.push(Decoration.widget({ widget: new TodoNoteWidget(line.to, lead + '  '), side: 1 })
               .range(line.to));
           }
         }
-        lineCls = 'cm-todoline';
+        lineCls = notes ? 'cm-todoline cm-todo-withnote' : 'cm-todoline';
         skip = m[0].length;
       }
     }

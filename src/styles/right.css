@@ -173,6 +173,68 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
   font-size:.94em;
   line-height:1.65;
 }
+/* 缩进写的备注（可以有很多行）：每一行都是一条 .cm-line，靠行装饰拼成一个连续的框 ——
+   首行圆上角、末行圆下角、中间上下都不画线，看起来就是一块。
+   上下留白一律用 padding：行高量的是元素自己的 rect，margin 不计入，
+   会让下面每一行的坐标整体上移（就是「有图片之后光标不准」那个坑） */
+#editor-host .cm-line.cm-todonote{
+  margin-left:22px;
+  margin-right:8px;
+  padding-left:11px !important;
+  padding-right:11px;
+  background:var(--hover-soft);
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  color:var(--t2);
+  font-size:.94em;
+  line-height:1.65;
+}
+#editor-host .cm-line.cm-todonote-first{
+  border-top:1px solid var(--border);
+  border-top-left-radius:8px;
+  border-top-right-radius:8px;
+  padding-top:8px !important;
+}
+#editor-host .cm-line.cm-todonote-last{
+  border-bottom:1px solid var(--border);
+  border-bottom-left-radius:8px;
+  border-bottom-right-radius:8px;
+  padding-bottom:8px !important;
+}
+/* 标题行和下面那块备注之间的缝。用 padding 不用 margin，理由同上 */
+#editor-host .cm-line.cm-todo-withnote{padding-bottom:7px !important}
+
+/* 缩进写的备注（可以有很多行）：每一行都是一条 .cm-line，靠行装饰拼成一个连续的框 ——
+   首行圆上角、末行圆下角、中间上下都不画线，看起来就是一块。
+   上下留白一律用 padding：行高量的是元素自己的 rect，margin 不计入，
+   会让下面每一行的坐标整体上移（就是「有图片之后光标不准」那个坑） */
+#editor-host .cm-line.cm-todonote{
+  margin-left:22px;
+  margin-right:8px;
+  padding-left:11px !important;
+  padding-right:11px;
+  background:var(--hover-soft);
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  color:var(--t2);
+  font-size:.94em;
+  line-height:1.65;
+}
+#editor-host .cm-line.cm-todonote-first{
+  border-top:1px solid var(--border);
+  border-top-left-radius:8px;
+  border-top-right-radius:8px;
+  padding-top:8px !important;
+}
+#editor-host .cm-line.cm-todonote-last{
+  border-bottom:1px solid var(--border);
+  border-bottom-left-radius:8px;
+  border-bottom-right-radius:8px;
+  padding-bottom:8px !important;
+}
+/* 标题行和下面那块备注之间的缝。用 padding 不用 margin，理由同上 */
+#editor-host .cm-line.cm-todo-withnote{padding-bottom:7px !important}
+
 /* 还没写解决方式时行尾那个小「＋」，平时隐形，鼠标移到这一行才出现。
    光 opacity:0 是不够的 —— 透明元素照样接收点击，行尾那 22px 就成了死区，
    点下去会插一个「→」而不是把光标放到行尾。所以一并关掉命中测试，
