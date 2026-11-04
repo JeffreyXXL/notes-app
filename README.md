@@ -95,7 +95,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 > which meant the sidebar was full of client folder names and the cards held site photos —
 > shipping those with the repo is a leak, so they were replaced entirely.
 
-`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo resolutions → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
+`desktop:smoke` really clicks through the app before exiting: a real mouse click on the settings panel's close button and the right-pane toggle → click a card → screenshot → click a table to edit → click elsewhere to re-render → click bold in the quick bar then undo → click `···` to open the action bar → switch through three color schemes × light/dark, one screenshot each → multi-select tags → rename a folder (and rename it back) → pin badge → drag to reorder (then drag back) → image rendering → single click only selects → tap the 50% preset → drag the handle wider → shrink to 25% → copy the image to the clipboard → double-click into source → paste an image to disk → card preview (no blank cards + thumbnails + CRLF excerpt) → code block highlighting + one click drops the cursor in → click an internal link → todo resolutions (the note drops into a box below the title, and clicking it puts the caret on that line) → whether the paragraph under an image takes the caret where you click → both panes expanded on startup → per-spot highlight colours (two different ones on one line + recolour in place) → Tab / Shift-Tab indent → card path shortens level by level → drag-reorder folders → old folder is reclaimed after rename → file renames when the title changes → placeholder filenames aligned to titles on startup → right-click hide / unhide from Hidden → rename the app → card image on its own row + multi-image layout → set password / lock / wrong password rejected / right password accepted. Screenshots land in `docs/`:
 
 | File | Contents |
 | --- | --- |
@@ -106,7 +106,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 | `desktop-image.png` | Image in the body (full window) |
 | `image-resize.png` | Selected image: outline + size toolbar + drag handle |
 | `code-block.png` | Code block: language label + syntax colors + copy button |
-| `note-links.png` | Internal links + todo resolutions |
+| `note-links.png` | Internal links + todos (title on one line, resolution in a box below) |
 | `card-multi.png` | Multi-image card preview (three different aspect ratios sharing a row) |
 | `lock-screen.png` | Password lock screen |
 | `desktop-window.png` / `tag-colors.png` | Default UI / tag colors |
@@ -152,6 +152,9 @@ A few assertions worth keeping:
 | `hlNode=ok mid={"text":"ZZ甲 和 乙","green":true,"pink":true}` | With the caret **between** two highlights, both stay rendered (`!text.includes('==')`) |
 | `hlNode inside={"text":"ZZ==甲=={green} 和 乙","green":false,"pink":true}` | With the caret inside the first one, **only that one** shows source; the second stays a coloured band |
 | `atomic=ok text="ZZa**粗**" col=5 key=handled` | One ArrowRight from after `a` **skips the whole `**`** and lands before 粗 (3→5); without atomic ranges it stops at 4, where nothing is visible |
+| `imgCaret=ok drift=0 posAt=86 head=86 range=85-98` | For the paragraph under an image: CM's line top matches the DOM (`drift=0`), looking a position up by coordinates finds that line (`posAt`), and a real click puts the caret there (`head`). All three fail when a block widget uses `margin` for spacing |
+| `collapse=ok cls="app" l=238 m=342` | Both left panes are expanded on startup (`.app` carries neither `no-left` nor `no-mid`, and both have real width) |
+| `todoNote=ok head=62 line=44-77` | The todo resolution is a block under the title (`display:block`, bordered, left edge right of the title text), and clicking it puts the caret on the todo line |
 | `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
 | `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
@@ -305,7 +308,10 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   - [x] export is too slow → switch to streaming, see https://example.com/stream
   ```
 
-- The arrow renders in a muted color and the resolution in small grey text, clearly separated from the todo itself; `[[notes]]` inside it are clickable.
+- It renders as a block: the todo title keeps its own line, and the resolution drops below it into a lightly bordered
+  box whose left edge lines up with the title text. The arrow is only a syntax separator and **is not shown** — put the
+  caret on the line and the whole line reverts to source, which is where you edit it.
+- `[[notes]]` inside the box are clickable, and inline markup (bold, code) still renders normally.
 - Checking the todo strikes through only up to the arrow — the resolution isn't part of "the todo".
 - A todo without a resolution shows a faint `＋` at the end of the line: it appears on hover, and clicking it inserts `→ ` and puts the cursor after it.
 - `->` works too; you don't have to type the full-width arrow.
@@ -445,7 +451,8 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - "已隐藏" is covered under "Hiding" above.
 
 **Panes and appearance**
-- The left and middle panes each collapse via the `‹` in their header; the collapsed state is remembered.
+- The left and middle panes each collapse via the `‹` in their header. **The collapsed state does not survive a restart**:
+  every launch opens with both panes expanded, while collapsing still works within the session.
 - The window defaults to **1570×960** (exactly enough for three comfortable panes). On smaller screens it shrinks proportionally to the
   available area (1175×655 on a 1366×768 laptop) and never spills off-screen.
 - Three color schemes × light/dark, independent dimensions, six combinations:
@@ -770,13 +777,30 @@ the Inbox (this bit us on title renames and folder renames). All file operations
 empty directory**, so the "reclaim the old folder" logic sees entries inside and refuses to delete — the old folder lingers forever.
 `vault.prune()` must **recurse down to remove empty subfolders first**, then walk back up, and only delete empty ones.
 
+**⑭ A block widget's vertical spacing must not be `margin`**
+
+CodeMirror measures a block's height from the element's own `getBoundingClientRect().height` — **`margin` is not included**.
+Image and code blocks were originally written as `margin: 16px 0 18px`, so every block was 32–34px shorter in the height map
+than in the real layout, and the error accumulates block by block: every line below sits higher in the map, `elementAtHeight`
+resolves a y to a block further down, and a click lands on the next line — worse the further you scroll. That is exactly the
+"after an image, the lines below take the caret in the wrong place" report.
+
+`padding` *is* part of the rect, so all vertical spacing uses padding: the image block is simply
+`margin:0; padding:16px 0 18px`. The code block's card has a border, where padding would inflate the border box, so an outer
+`.cm-cbwrap` carries the padding and the card itself is `margin:0`. Tables were always `padding:8px 0 14px`, which is why
+they never showed the bug — and that was the control that cracked it.
+
+The same goes for `<img>`: it decodes asynchronously, so its height is 0 when it is attached and only becomes real after
+CodeMirror has measured. Without an explicit `view.requestMeasure()` the map keeps the 0 forever. Both the `load` event and
+the resize drag call it.
+
 ---
 
 ## 5. Known limitations
 
 - Syntax highlighting is a hand-written lexer (`src/editor/highlight.ts`). It covers common languages but is **not a full parser**:
   no multi-line string continuations, no JS inside template strings, no heredocs. Extreme code may color inaccurately (the text itself is fine).
-- Code blocks render as a whole, so **to select and copy text inside one you must double-click into source first**; to copy the entire
+- Code blocks render as a whole, so **one click drops you into source** and you can select from there; to copy the entire
   block use the "copy" button at its top right.
 - `[[title]]` fuzzy title matching only accepts a **unique result**; with two notes of the same name it falls back to path matching.
 - The filename rename triggered by a title change has a 1.4 s debounce — quitting immediately after editing may skip the rename

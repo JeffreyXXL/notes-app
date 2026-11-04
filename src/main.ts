@@ -29,6 +29,12 @@ async function boot(): Promise<void> {
     return;
   }
 
+  // 启动时把左侧两栏都摊开。折叠状态不跨会话保留 —— 上次为了腾地方把栏收起来，
+  // 下次打开还得先点一下才知道自己有多少笔记，比「不记得」更烦人。
+  // 本次会话里折叠仍然有效，只是不写回设置
+  store.settings.leftCollapsed = false;
+  store.settings.midCollapsed = false;
+
   applySettings();
   applyCollapse();
 

@@ -83,7 +83,12 @@
 /* 图片：渲染态
    单独成行的 ![alt](path) 会被整行换成一张图。
    圆角 + 极淡描边，和表格、卡片保持同一套观感。 */
-.cm-img{position:relative;margin:16px 0 18px;display:flex;justify-content:center;align-items:center}
+/* 上下留白必须用 padding，不能用 margin。
+   CodeMirror 量块高量的是元素自己的 getBoundingClientRect().height —— margin 不在里面。
+   用了 margin，高度表就比真实布局矮一截，图片下面每一行在表里都上移了，
+   点哪行光标都落到下一行。这是「有图片之后光标位置不准」的根因 */
+.cm-img{position:relative;margin:0;padding:16px 0 18px;
+  display:flex;justify-content:center;align-items:center}
 /* 图片外面这层贴着图片的边，工具条和把手都挂在它上面 */
 .cm-img .img-frame{position:relative;display:inline-block;max-width:100%;line-height:0}
 .cm-img img{max-width:100%;height:auto;display:block;border-radius:9px;
@@ -151,9 +156,23 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 .cm-todo{display:inline-block;vertical-align:middle}
 .cm-todo-done{text-decoration:line-through;text-decoration-thickness:1px;color:var(--t4)}
 
-/* 待办的「解决方式」：箭头 + 一段淡色的说明，可以带 [[链接]] */
-.cm-todo-arrow{color:var(--accent);opacity:.55;padding:0 2px}
-.cm-todo-note{color:var(--t3);font-size:.94em}
+/* 待办的「解决方式」：挂在待办下面的一块备注区，不再是跟在箭头后面的小字。
+   箭头只是语法上的分隔符，平时不显示 —— 光标进这一行时会整个露出源码，那时能改。
+   用 display:block 让它脱离行内流：标题留在上面一行，备注落到下面并撑成一个框 */
+.cm-todo-arrow{display:none}
+.cm-todo-note{
+  display:block;
+  /* 底部不留 margin：它和 .cm-line 的下边缘会折叠，那一两像素不会计入行高，
+     行高表又对不上了。上面那 7px 夹在两段之间，不会折叠，可以留着 */
+  margin:7px 0 0 22px;
+  padding:8px 11px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--hover-soft);
+  color:var(--t2);
+  font-size:.94em;
+  line-height:1.65;
+}
 /* 还没写解决方式时行尾那个小「＋」，平时隐形，鼠标移到这一行才出现。
    光 opacity:0 是不够的 —— 透明元素照样接收点击，行尾那 22px 就成了死区，
    点下去会插一个「→」而不是把光标放到行尾。所以一并关掉命中测试，
@@ -169,7 +188,10 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 /* ============================================================
    代码块：整块渲染
    ============================================================ */
-.cm-codeblock{margin:14px 0 18px;border:1px solid var(--cb-border);border-radius:10px;
+/* 同理：留白在外层 .cm-cbwrap 上，用 padding；带边框的卡片是内层。
+   给卡片本身加 margin 的话，高度表同样会漏掉这段，块下面全部错位 */
+.cm-cbwrap{padding:14px 0 18px}
+.cm-codeblock{margin:0;border:1px solid var(--cb-border);border-radius:10px;
   background:var(--cb-bg);overflow:hidden}
 .cb-head{display:flex;align-items:center;gap:8px;padding:7px 12px 0;font-family:var(--font-ui)}
 .cb-lang{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--t5);

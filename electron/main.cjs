@@ -1127,6 +1127,11 @@ function runSmoke() {
         // 第 55 轮：行内标记按「每一处」判断（不是整行），以及光标跳过被藏掉的标记
         let hlNodeOk = false;
         let atomicOk = false;
+        // 第 56 轮：图片异步解码后要重新测量（否则下面每一行的坐标全偏）、
+        // 启动时左两栏默认摊开、待办备注改成下方独立的框
+        let imgCaretOk = false;
+        let collapseOk = false;
+        let todoNoteOk = false;
         let blockClickOk = false;
         let plusHitOk = false;
         let qbEndOk = false;
@@ -1143,6 +1148,26 @@ function runSmoke() {
           win.show();
           win.focus();
           await wait(400);
+
+          // 两栏默认摊开。折叠状态以前会写进设置，上次为了腾地方收起来，
+          // 下次打开还是收着的 —— 一进来先看到三条空栏，比「不记得」更烦人
+          try {
+            const cols = JSON.parse(String(await js(`(()=>{
+              const app = document.querySelector('.app');
+              const l = document.querySelector('.col-left');
+              const m = document.querySelector('.col-mid');
+              return JSON.stringify({
+                cls: app ? String(app.className) : '',
+                lw: l ? Math.round(l.getBoundingClientRect().width) : 0,
+                mw: m ? Math.round(m.getBoundingClientRect().width) : 0
+              });
+            })()`)));
+            collapseOk = !/no-left|no-mid/.test(cols.cls) && cols.lw > 120 && cols.mw > 120;
+            console.log('SMOKE collapse=' + (collapseOk ? 'ok' : 'bad') +
+              ' cls=' + JSON.stringify(cols.cls) + ' l=' + cols.lw + ' m=' + cols.mw);
+          } catch (err) {
+            console.log('SMOKE collapseFailed=' + err.message);
+          }
 
           const blank = await js(`(()=>{
             const b = document.querySelector('.blank');
@@ -2202,6 +2227,89 @@ function runSmoke() {
             console.log('SMOKE imgClick2Failed=' + err.message);
           }
 
+          // 图片下面的行，光标必须落在这一行上。
+          // <img> 是异步解码的：挂上去那一刻高度是 0，CodeMirror 量完才变成真实高度。
+          // 以前没人通知它重测，高度表里这块一直记着 0 —— 下面每一行的坐标全偏，
+          // 点「图片上下都应该是正常段落」会落到别的行上，看着就是「光标位置不准」
+          try {
+            // 先把光标挪回标题，图片重新渲染回来
+            const headPt = await js(`(()=>{
+              const l = document.querySelector('#editor-host .cm-line');
+              if (!l) return null;
+              const r = l.getBoundingClientRect();
+              return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            if (headPt) {
+              win.webContents.sendInputEvent({ type: 'mouseDown', x: headPt.x, y: headPt.y, button: 'left', clickCount: 1 });
+              win.webContents.sendInputEvent({ type: 'mouseUp', x: headPt.x, y: headPt.y, button: 'left', clickCount: 1 });
+              await wait(500);
+            }
+            // 等图真的解码完 —— 没解码完高度还是 0，量了也没意义
+            for (let i = 0; i < 20; i++) {
+              const done = await js(`(()=>{
+                const im = document.querySelector('.cm-img img');
+                return !!im && im.complete && im.naturalWidth > 0;
+              })()`);
+              if (done) break;
+              await wait(200);
+            }
+            // 先滚到目标行，再量 —— scrollIntoView 之后 CM 的 scrollTop 要等一帧才更新
+            await js(`(()=>{
+              const l = [...document.querySelectorAll('#editor-host .cm-line')]
+                .find(x => x.textContent.includes('图片上下都应该是正常段落'));
+              if (l) l.scrollIntoView({ block: 'center' });
+              return '';
+            })()`);
+            await wait(400);
+            const pr = JSON.parse(String(await js(`(()=>{
+              const ed = window.__editor;
+              let target = null;
+              for (let n = 1; n <= ed.state.doc.lines; n++) {
+                const l = ed.state.doc.line(n);
+                if (l.text.includes('图片上下都应该是正常段落')) { target = l; break; }
+              }
+              const dom = [...document.querySelectorAll('#editor-host .cm-line')]
+                .find(x => x.textContent.includes('图片上下都应该是正常段落'));
+              if (!target || !dom) return JSON.stringify({ err: 'missing' });
+              // 点文字自己的矩形，不是整行的盒子 —— 行盒比字高出一截，
+              // 点正中容易落到下一行，那是量法的问题，不是布局的问题
+              const tn = [...dom.childNodes].find(n => n.nodeType === 3);
+              let r = dom.getBoundingClientRect();
+              if (tn) {
+                const rg = document.createRange();
+                rg.selectNodeContents(tn);
+                r = rg.getBoundingClientRect();
+              }
+              const c = ed.coordsAtPos(target.from);
+              const px = Math.round(r.left + 20);
+              const py = Math.round(r.top + r.height / 2);
+              return JSON.stringify({
+                from: target.from, to: target.to,
+                domTop: Math.round(r.top),
+                cmTop: c ? Math.round(c.top) : -1,
+                x: px, y: py,
+                // 这一条才是关键：posAtCoords 走的是高度表（elementAtHeight），
+                // 表比真实布局矮的话它会指到别的行上，或者干脆返回 null（块在视口外）
+                posAt: ed.posAtCoords({ x: px, y: py })
+              });
+            })()`)));
+            if (pr.err) throw new Error(pr.err);
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: pr.x, y: pr.y, button: 'left', clickCount: 1 });
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: pr.x, y: pr.y, button: 'left', clickCount: 1 });
+            await wait(400);
+            const head = Number(await js('(() => window.__editor.state.selection.main.head)()'));
+            // 三件事一起看：CM 算的行顶和 DOM 对得上、按坐标查位置查得到这一行、
+            // 真点下去光标也落这一行。高度表漏掉 margin 的时候后两条都会挂
+            const drift = Math.abs(pr.cmTop - pr.domTop);
+            const posOk = pr.posAt != null && pr.posAt >= pr.from && pr.posAt <= pr.to;
+            imgCaretOk = drift <= 12 && posOk && head >= pr.from && head <= pr.to;
+            console.log('SMOKE imgCaret=' + (imgCaretOk ? 'ok' : 'bad') +
+              ' drift=' + drift + ' posAt=' + pr.posAt +
+              ' head=' + head + ' range=' + pr.from + '-' + pr.to);
+          } catch (err) {
+            console.log('SMOKE imgCaretFailed=' + err.message);
+          }
+
           // 粘贴图片：合成一个带图片文件的 paste 事件，走完整的「落盘 + 插入」链路。
           // 这是没法用真鼠标点的部分（系统文件选择框脚本点不了），只能这么验。
           const pasted = await js(`(async () => {
@@ -2408,6 +2516,68 @@ function runSmoke() {
             };
           })()`);
           console.log('SMOKE link=' + JSON.stringify(li));
+
+          // 备注不再是「→」后面那串小字，而是挂在标题下面的一块带框区域。
+          // 箭头只是语法分隔符，平时不显示（光标进这一行时整行露源码，那时能改）
+          try {
+            const tn = JSON.parse(String(await js(`(()=>{
+              const n = document.querySelector('.cm-todo-note');
+              if (!n) return JSON.stringify({ err: 'nonote' });
+              const cs = getComputedStyle(n);
+              const r = n.getBoundingClientRect();
+              const line = n.closest('.cm-line');
+              const title = line ? line.querySelector('.cm-todo') : null;
+              const tr = title ? title.getBoundingClientRect() : null;
+              const a = document.querySelector('.cm-todo-arrow');
+              return JSON.stringify({
+                display: cs.display,
+                border: cs.borderTopWidth,
+                top: Math.round(r.top),
+                titleTop: tr ? Math.round(tr.top) : -1,
+                left: Math.round(r.left),
+                titleLeft: tr ? Math.round(tr.left) : -1,
+                arrow: a ? getComputedStyle(a).display : 'absent',
+                text: String(n.textContent).slice(0, 24),
+                x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2)
+              });
+            })()`)));
+            if (tn.err) throw new Error(tn.err);
+
+            // 点备注这块，光标必须落在待办那一行里 —— 它是这一行的内容。
+            // 高度表漏掉这块的高度的话，点下去会落到别的行上
+            await clickAt({ x: tn.x, y: tn.y });
+            const head = Number(await js('(() => window.__editor.state.selection.main.head)()'));
+            const todoLine = JSON.parse(String(await js(`(()=>{
+              const ed = window.__editor;
+              for (let n = 1; n <= ed.state.doc.lines; n++) {
+                const l = ed.state.doc.line(n);
+                if (l.text.includes('换成新方案')) return JSON.stringify({ from: l.from, to: l.to });
+              }
+              return JSON.stringify({ from: -1, to: -1 });
+            })()`)));
+
+            todoNoteOk = tn.display === 'block' && tn.border !== '0px'
+              && tn.titleTop > 0 && tn.top > tn.titleTop + 4
+              && tn.left > tn.titleLeft
+              && tn.arrow === 'none'
+              && String(tn.text).trim().startsWith('换成新方案')
+              && head >= todoLine.from && head <= todoLine.to;
+            console.log('SMOKE todoNote=' + (todoNoteOk ? 'ok' : 'bad') +
+              ' head=' + head + ' line=' + todoLine.from + '-' + todoLine.to +
+              ' ' + JSON.stringify(tn));
+
+            // 复位：点回标题，待办重新渲染成卡片，截图才是干净的样子
+            const backPt = await js(`(()=>{
+              const l = document.querySelector('#editor-host .cm-line');
+              if (!l) return null;
+              const r = l.getBoundingClientRect();
+              return { x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            if (backPt) await clickAt(backPt);
+            await wait(400);
+          } catch (err) {
+            console.log('SMOKE todoNoteFailed=' + err.message);
+          }
 
           // 截图：待办的「→ 解决方式」和行尾的「＋」
           win.showInactive();
@@ -3473,6 +3643,7 @@ function runSmoke() {
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
           && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk
+          && imgCaretOk && collapseOk && todoNoteOk
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
@@ -3481,7 +3652,7 @@ function runSmoke() {
           hideOk, lockOk, appNameOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
-          hlNodeOk, atomicOk,
+          hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoNoteOk,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);

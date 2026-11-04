@@ -420,6 +420,12 @@ class CodeWidget extends WidgetType {
   }
 
   override toDOM(view: EditorView): HTMLElement {
+    // 外层只负责上下留白（padding），内层才是那张带边框的卡片。
+    // 留白不能用 margin：CodeMirror 量块高量的是元素自己的 rect，margin 不算，
+    // 高度表就会比真实布局矮 32px —— 块下面所有行的坐标整体上移，点哪行都落错
+    const outer = document.createElement('div');
+    outer.className = 'cm-cbwrap';
+
     const wrap = document.createElement('div');
     wrap.className = 'cm-codeblock';
 
@@ -454,14 +460,15 @@ class CodeWidget extends WidgetType {
     code.innerHTML = highlight(this.code, this.lang);
     pre.appendChild(code);
     wrap.appendChild(pre);
+    outer.appendChild(wrap);
 
     // 落点放在第一行代码上，而不是围栏行：点一下就能直接改代码，
     // 不用再点第二下。围栏行反正也一起露出来了
     const doc = view.state.doc;
     const fence = doc.lineAt(Math.min(this.pos, doc.length));
     const enter = fence.number < doc.lines ? doc.line(fence.number + 1).from : fence.from;
-    clickToEnter(wrap, view, enter);
-    return wrap;
+    clickToEnter(outer, view, enter);
+    return outer;
   }
 
   private async doCopy(btn: HTMLElement): Promise<void> {
@@ -672,7 +679,12 @@ class ImageWidget extends WidgetType {
     img.addEventListener('error', () => {
       img.remove();
       this.showMissing(fig, `找不到图片：${this.src}`);
+      // 破图占位和真图高度不一样，下面所有行得重新量
+      view.requestMeasure();
     });
+    // 图片是异步解码的：挂上去那一刻高度还是 0，CodeMirror 量完才变成真实高度。
+    // 不主动叫它重测，它就一直按 0 高记着 —— 下面每一行的坐标全偏，点哪行光标都落错地方
+    img.addEventListener('load', () => view.requestMeasure());
     frame.appendChild(img);
     fig.appendChild(frame);
 
@@ -822,12 +834,15 @@ class ImageWidget extends WidgetType {
       const maxW = Math.max(80, Math.round(fig.getBoundingClientRect().width));
       let w = Math.round(startW);
 
-      // 拖动过程中只改内联样式，不发事务 —— 每移动 1px 就重建一次 widget 会卡死
+      // 拖动过程中只改内联样式，不发事务 —— 每移动 1px 就重建一次 widget 会卡死。
+      // 但尺寸变了 CodeMirror 就不知道这块有多高了，得让它重新量，
+      // 否则拖完图下面的行会整体错位（松手时的 commit 才会真正落盘）
       const onMove = (ev: MouseEvent) => {
         w = Math.round(Math.min(maxW, Math.max(60, startW + ev.clientX - startX)));
         frame.style.width = w + 'px';
         img.style.width = '100%';
         label.textContent = w + 'px';
+        view.requestMeasure();
       };
       const onUp = () => {
         window.removeEventListener('mousemove', onMove);
@@ -1318,7 +1333,10 @@ function buildDecorations(view: EditorView): Decorations {
           if (arrow >= 0) {
             out.push(Decoration.mark({ class: 'cm-todo-arrow' })
               .range(line.from + arrow, line.from + arrow + arrowLen));
-            const noteFrom = line.from + arrow + arrowLen;
+            // 箭头后面那个空格不算备注的一部分：箭头本身不显示，
+            // 空格留着的话框里的文字会平白多缩进一格
+            let noteFrom = line.from + arrow + arrowLen;
+            while (noteFrom < line.to && /\s/.test(state.doc.sliceString(noteFrom, noteFrom + 1))) noteFrom++;
             if (line.to > noteFrom) {
               out.push(Decoration.mark({ class: 'cm-todo-note' }).range(noteFrom, line.to));
             }
