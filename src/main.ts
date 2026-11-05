@@ -12,6 +12,7 @@ import { newNote } from './ui/actions';
 import { saveMeta, closeMeta } from './ui/meta';
 import { initTitlebar } from './ui/titlebar';
 import { maybeLockOnBoot, isLocked } from './ui/lock';
+import { bindWindowDrop } from './ui/docs';
 import { setVaultRoot } from './core/image';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
@@ -56,6 +57,8 @@ async function boot(): Promise<void> {
   initSettingsUI();
   initTitlebar();
   bindGlobal();
+  // 文件拖到任何地方都能收进库（编辑区里的图片拖放有自己的处理，会先拦掉）
+  bindWindowDrop();
   onChange(renderAll);
   renderAll();
 

@@ -171,3 +171,7 @@ html[data-theme="dark"] .tag-suggest .tg:hover{background:hsl(var(--th,40) 30% 3
 .mini-cancel{border-top:1px solid var(--border-soft);text-align:center;padding:13px;font-size:13px;
   color:var(--t3);cursor:pointer}
 .mini-cancel:hover{background:var(--hover-soft)}
+
+/* 次要按钮：边框代替底色，跟主按钮并排时不抢视线（「添加文档」用） */
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--t3)}
+.btn.ghost:hover{background:var(--hover);color:var(--t1)}

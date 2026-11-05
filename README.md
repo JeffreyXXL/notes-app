@@ -109,6 +109,7 @@ npm run desktop:shots  # same, but against a fictional demo vault — this is wh
 | `note-links.png` | Internal links + todos (title on one line, the note drops into a box below, several lines form one box) |
 | `card-multi.png` | Multi-image card preview (three different aspect ratios sharing a row) |
 | `lock-screen.png` | Password lock screen |
+| `note-doc.png` | A document note's right pane: file panel (type badge / name / size) with 打开 and 在文件夹中显示, and the editor for notes about it |
 | `desktop-window.png` / `tag-colors.png` | Default UI / tag colors |
 
 > `zoom-*.png` (detail crops) go through `capturePage` region capture and are written to the system temp directory instead of `docs/`.
@@ -144,6 +145,7 @@ A few assertions worth keeping:
 | `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | Clicking a **blank spot** on the link line drops the caret at 11, inside that line (10–25) — a line containing a link still takes the caret |
 | `linkJump="图片测试"` | A **plain click** on `[[图片测试]]` (no modifier) navigates (verified via the selected card in the middle pane) |
 | `version=ok {"verText":"v0.1.9","app":"0.1.9"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
+| `doc=ok {"dc":{"badge":"PDF","file":"smoke-doc.pdf","size":"8 B","title":"smoke-doc"},"dv":{…},"opened":["_docs/smoke-doc.pdf"],"existed":true,"gone":true}` | Drop a PDF onto the list: the card gets a PDF badge / file name / size, the right pane shows the file panel (打开 + 在文件夹中显示, no formatting bar), double-clicking hands the path to the OS (`doc_open` recorded it), and emptying the trash removes the original from `_docs/` too |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
 | `hlEach=ok {"a":{"cls":"cm-hl cm-hl-green",…},"b":{"cls":"cm-hl cm-hl-pink",…}}` | **Two highlights on one line, each with its own colour** — and the line renders as just 甲乙, markers and colour ids hidden |
@@ -329,6 +331,31 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
 - The arrow (`→` / `->`) is **no longer syntax**: it is plain text now, so writing `- [ ] title → note` by hand no
   longer produces a second box. Put the note on the next line, indented.
 - A todo without a note shows a faint `＋` at the end of the line: it appears on hover, and clicking it adds an indented note line below.
+
+**Documents (PDF / Word / spreadsheets / anything)**
+
+- The **添加文档** button at the top of the middle pane pulls any file into the vault: the file is **copied**
+  into `_docs/`, and a card is created for it in the current folder.
+- You can also **drop a file onto the list** (or anywhere in the window) — same result.
+- The card shows a type badge, the file name and its size. **Double-click the card** and the OS opens it with
+  the default program — a PDF in your reader, a docx in Word, exactly what double-clicking in Explorer does.
+- A single click still just selects: the right pane shows a file panel with **打开** and **在文件夹中显示**,
+  and the editor underneath is for **notes about the document** — they show up on the card too.
+- Document cards behave like notes: pin, archive, tag, search, drag to reorder. Purging one from the trash
+  deletes the original in `_docs/` as well, so no orphaned files are left behind.
+- The binary is **not** embedded in the `.md` — mixing binary into the body would make the vault unreadable
+  by any other editor. The note only carries a path:
+
+  ```markdown
+  ---
+  doc: _docs/需求评审纪要.pdf
+  docsize: 670
+  ---
+  ```
+
+  So the vault still goes into Git cleanly: every `.md` is text, originals sit in one directory.
+- Moving the note between folders doesn't break the link — the path is vault-relative, not note-relative.
+- To send the file to someone: **在文件夹中显示** in the right pane, then drag it out of Explorer.
 
 **Card previews**
 - Each card in the middle pane shows "an excerpt + thumbnails from the body". Excerpts are at most two lines, truncated beyond that.

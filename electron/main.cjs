@@ -223,6 +223,20 @@ const DEMO_NOTES = [
 `
   },
   {
+    rel: '工作/产品/需求评审纪要.md', tags: ['产品'], ago: 3,
+    doc: '_docs/需求评审纪要.pdf',
+    body: `# 需求评审纪要
+
+评审当天的记录。原件是 PDF，双击卡片就用系统默认程序打开，不用先把文件拖到桌面上。
+
+## 结论
+
+- 搜索只做标题 + 正文，先不上拼音
+- 索引重建放到设置里，别自动跑
+- 移动端这一版不做
+`
+  },
+  {
     rel: '工作/本周待办.md', tags: ['待办'], pinned: true, ago: 2,
     body: `# 本周待办
 
@@ -483,8 +497,40 @@ function demoFrontMatter(n, now) {
     `updated: ${iso}`
   ];
   if (n.hidden) lines.push('hidden: true');
+  // 文档笔记：二进制在 _docs/ 下，这里只记路径和体积
+  if (n.doc) lines.push(`doc: ${n.doc}`, `docsize: ${n.docSize || 0}`);
   lines.push('---', '');
   return lines.join('\n');
+}
+
+/**
+ * 一个真能打开的极简 PDF（演示库里的「文档」）。
+ * 手写 xref 而不是塞一段假字节：双击是能真的打开给人看的。
+ */
+function demoPdf() {
+  const stream = 'BT /F1 20 Tf 60 760 Td (Requirements review) Tj 0 -34 Td '
+    + '/F1 12 Tf (Kept in the vault as a document, opened by the OS.) Tj ET';
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
+      + '/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  ];
+
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objs.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) out += `${String(off).padStart(10, '0')} 00000 n \n`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
 }
 
 /** 把演示库整个重写一遍（先删干净，保证每次跑出来一模一样） */
@@ -496,11 +542,18 @@ function seedDemoVault(dir) {
     fs.writeFileSync(path.join(dir, '_assets', a.name), a.svg, 'utf8');
   }
 
+  // 演示库里放一个真的 PDF：截图里那张「文档卡片」是能双击打开的
+  const pdf = demoPdf();
+  fs.mkdirSync(path.join(dir, '_docs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '_docs', '需求评审纪要.pdf'), pdf);
+
   const now = Date.now();
   for (const n of DEMO_NOTES) {
     const p = path.join(dir, n.rel);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, demoFrontMatter(n, now) + n.body, 'utf8');
+    // 文档体积按真实文件写，别在卡片上编一个数
+    const meta = n.doc ? { ...n, docSize: pdf.length } : n;
+    fs.writeFileSync(p, demoFrontMatter(meta, now) + n.body, 'utf8');
   }
 }
 
@@ -715,6 +768,78 @@ async function imageForClipboard(src, base) {
 }
 
 /* ============================================================
+   文档：任意文件收进笔记库的 _docs/，双击交给系统默认程序
+   ============================================================ */
+
+const DOC_DIR = '_docs';
+
+/**
+ * 冒烟 / 演示模式下双击文档不该真的把 Acrobat 拉起来，
+ * 这里留一份「谁被打开过」的记录给测试查。
+ */
+const DOC_OPENED = [];
+
+function docDirAbs() {
+  const d = path.join(vaultRoot(), DOC_DIR);
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+
+/** 同名不覆盖：`报告.pdf` 已经在了就落成 `报告 2.pdf` */
+function uniqueDocName(dir, raw) {
+  const ext = path.extname(raw);
+  const base = path.basename(raw, ext)
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60) || '文档';
+  let out = `${base}${ext}`;
+  for (let i = 2; fs.existsSync(path.join(dir, out)); i++) out = `${base} ${i}${ext}`;
+  return out;
+}
+
+/** 复制一批绝对路径进来，返回落盘后的信息（渲染层拿它建笔记） */
+function importDocs(srcPaths) {
+  const dir = docDirAbs();
+  const out = [];
+
+  for (const src of srcPaths) {
+    const p = String(src || '');
+    if (!p) continue;
+    try {
+      const st = fs.statSync(p);
+      if (!st.isFile()) continue;
+      const name = uniqueDocName(dir, path.basename(p));
+      fs.copyFileSync(p, path.join(dir, name));
+      out.push({
+        relPath: `${DOC_DIR}/${name}`,
+        name,
+        size: st.size,
+        ext: path.extname(name).slice(1).toLowerCase()
+      });
+    } catch (err) {
+      console.error('[notes-app] 导入文档失败', p, err.message);
+    }
+  }
+  return out;
+}
+
+/** 拿不到真实路径时的兜底：渲染层把文件读成 base64 传过来 */
+function saveDoc(name, base64) {
+  const dir = docDirAbs();
+  const clean = uniqueDocName(dir, String(name || '文档'));
+  const buf = Buffer.from(String(base64 || ''), 'base64');
+  if (!buf.length) throw new Error('空文件');
+  fs.writeFileSync(path.join(dir, clean), buf);
+  return {
+    relPath: `${DOC_DIR}/${clean}`,
+    name: clean,
+    size: buf.length,
+    ext: path.extname(clean).slice(1).toLowerCase()
+  };
+}
+
+/* ============================================================
    IPC：命令名 / 参数与 Rust 版完全一致
    ============================================================ */
 
@@ -744,6 +869,49 @@ function registerIpc() {
     vault.writeBinary(root(), rel_path, base64));
 
   ipcMain.handle('asset_exists', (_e, { rel_path }) => vault.exists(root(), rel_path));
+
+  /* ---- 文档：选文件 / 拖进来 / 双击打开 / 在文件夹里定位 ---- */
+
+  ipcMain.handle('doc_pick', async () => {
+    const r = await dialog.showOpenDialog(win, {
+      title: '添加文档',
+      buttonLabel: '添加',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '所有文件', extensions: ['*'] }]
+    });
+    if (r.canceled || !r.filePaths.length) return [];
+    return importDocs(r.filePaths);
+  });
+
+  // 拖放：渲染层用 webUtils 拿到真实路径，主进程直接复制，不走 base64
+  ipcMain.handle('doc_import', (_e, { paths }) => importDocs(Array.isArray(paths) ? paths : []));
+
+  ipcMain.handle('doc_save', (_e, { name, base64 }) => saveDoc(name, base64));
+
+  ipcMain.handle('doc_open', async (_e, { rel_path }) => {
+    let abs;
+    try { abs = vault.safeJoin(root(), rel_path); } catch { return 'missing'; }
+    if (!fs.existsSync(abs)) return 'missing';
+
+    DOC_OPENED.push(String(rel_path));
+    // 冒烟里不能真的拉起外部程序：会挡住窗口，测试就卡住了
+    if (SMOKE || DEMO) return '';
+    return (await shell.openPath(abs)) || '';
+  });
+
+  ipcMain.handle('doc_reveal', (_e, { rel_path }) => {
+    try {
+      const abs = vault.safeJoin(root(), rel_path);
+      if (!fs.existsSync(abs)) return false;
+      shell.showItemInFolder(abs);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  // 给冒烟用：双击到底打开过哪些文档
+  ipcMain.handle('doc_opened', () => DOC_OPENED.slice());
 
   // 复制图片到系统剪贴板：选中图片后按 Ctrl+C 或点工具条上的「复制」
   ipcMain.handle('clipboard_image', async (_e, { src, base }) => {
@@ -2362,6 +2530,7 @@ function runSmoke() {
         let codeOk = false;
         let linkOk = false;
         let versionOk = false;
+        let docOk = false;
         let cardPathOk = false;
         let leftOrderOk = false;
         let pruneOk = false;
@@ -2710,6 +2879,123 @@ function runSmoke() {
             && String(activeTitle).trim() === '图片测试';
         } catch (err) {
           console.log('SMOKE linkFailed=' + err.message);
+        }
+
+        /* ============================================================
+           文档：拖进来 → 卡片 → 右栏面板 → 双击打开 → 彻底删除连带原件
+           ============================================================ */
+        try {
+          // 造一次真实的 drop 事件，走中栏那条拖放通道。
+          // 合成的 File 没有磁盘路径，于是落到 doc_save 那条 base64 兜底 ——
+          // 正好把「拿不到路径」这条最难走的支路也测了
+          await js(`(()=>{
+            const dt = new DataTransfer();
+            dt.items.add(new File([new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52])], 'smoke-doc.pdf',
+              { type: 'application/pdf' }));
+            document.getElementById('mid-list').dispatchEvent(
+              new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+          })()`);
+          await wait(1200);
+
+          const dc = JSON.parse(String(await js(`(()=>{
+            const w = document.querySelector('.swipe[data-doc="1"]');
+            if (!w) return JSON.stringify({ err: 'nocard' });
+            const q = s => ((w.querySelector(s) || {}).textContent || '').trim();
+            return JSON.stringify({
+              badge: q('.doc-badge'), file: q('.doc-file'), size: q('.doc-size'),
+              title: q('h4'), id: w.dataset.id || ''
+            });
+          })()`)));
+
+          // 单击选中：右栏要出现文件面板，而不是一块空白编辑器
+          await js(`(()=>{
+            const w = document.querySelector('.swipe[data-doc="1"]');
+            if (w) w.querySelector('.card').click();
+          })()`);
+          await wait(500);
+
+          const dv = JSON.parse(String(await js(`(()=>{
+            const v = document.querySelector('.doc-view');
+            if (!v) return JSON.stringify({ err: 'noview' });
+            const t = s => ((v.querySelector(s) || {}).textContent || '').trim();
+            return JSON.stringify({
+              name: t('.dv-name'), sub: t('.dv-sub'),
+              open: (document.getElementById('dv-open') || {}).textContent || '',
+              reveal: (document.getElementById('dv-reveal') || {}).textContent || '',
+              quickbar: document.querySelectorAll('#right .quickbar').length
+            });
+          })()`)));
+
+          // 双击卡片 → 交给系统默认程序（冒烟里只记账，不会真的拉起 Acrobat）
+          const openedBefore = DOC_OPENED.length;
+          await js(`(()=>{
+            const w = document.querySelector('.swipe[data-doc="1"]');
+            if (w) w.querySelector('.card').dispatchEvent(
+              new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+          })()`);
+          await wait(500);
+          const opened = DOC_OPENED.slice(openedBefore);
+
+          // 原件到底在不在：从笔记的 front matter 里读 doc 路径，别猜文件名
+          const noteAbs = dc.id ? path.join(vaultRoot(), dc.id) : '';
+          let docRel = '';
+          try {
+            const m = /^doc:[ \t]*(.+)$/m.exec(fs.readFileSync(noteAbs, 'utf8'));
+            if (m) docRel = m[1].trim();
+          } catch { /* 没写进去就是失败，下面会看出来 */ }
+          const docAbs = docRel ? path.join(vaultRoot(), docRel) : '';
+          const existed = !!docAbs && fs.existsSync(docAbs);
+
+          // 彻底删除：删壳的时候 _docs 里的原件也要一起走，不然留一堆孤儿
+          await js(`(()=>{
+            const w = document.querySelector('.swipe[data-doc="1"]');
+            const a = w && w.querySelector('.act[data-act="del"]');
+            if (a) a.click();
+          })()`);
+          await wait(600);
+          await js("(()=>{ const r = document.querySelector('.row[data-view=\"trash\"]'); if (r) r.click(); })()");
+          await wait(600);
+          await js(`(()=>{
+            const w = document.querySelector('.swipe[data-doc="1"]');
+            const a = w && w.querySelector('.act[data-act="purge"]');
+            if (a) a.click();
+          })()`);
+          await wait(700);
+          const gone = !!docAbs && !fs.existsSync(docAbs);
+
+          // 再点一次废纸篓退回「全部笔记」，后面的用例还要看整个列表
+          await js("(()=>{ const r = document.querySelector('.row[data-view=\"trash\"]'); if (r) r.click(); })()");
+          await wait(500);
+
+          docOk = !dc.err && !dv.err
+            && dc.badge === 'PDF' && dc.file === 'smoke-doc.pdf'
+            && dc.title === 'smoke-doc' && dc.size.length > 0
+            && dv.name === 'smoke-doc.pdf'
+            && dv.sub.includes('PDF') && dv.sub.includes('_docs')
+            && dv.open.includes('打开') && dv.reveal.includes('文件夹')
+            && dv.quickbar === 0
+            && opened.length === 1 && opened[0] === docRel
+            && existed && gone;
+
+          console.log('SMOKE doc=' + (docOk ? 'ok' : 'bad') + ' ' + JSON.stringify({
+            dc, dv, opened, docRel, existed, gone
+          }));
+        } catch (err) {
+          console.log('SMOKE docFailed=' + err.message);
+        }
+
+        // 截图：文档笔记的右栏（文件面板 + 备注）。只有演示库才有这篇
+        if (DEMO) {
+          try {
+            await openNote('需求评审纪要');
+            await wait(700);
+            win.showInactive();
+            await wait(600);
+            console.log('SMOKE docShot=' + (await saveShot('note-doc.png')));
+            win.hide();
+          } catch (err) {
+            console.log('SMOKE docShotFailed=' + err.message);
+          }
         }
 
         // ③ 卡片上的目录路径：全部笔记里是完整路径，进到某一级目录后只显示剩下的层级
@@ -3784,7 +4070,7 @@ function runSmoke() {
           && blankOk && imgOk && imgPickOk && imgBoxOk && imgResizeOk && imgEditOk && imgPasteOk
           && tagOk && renameOk && pinOk && orderOk && previewOk
           && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
-          && hideOk && lockOk && appNameOk && versionOk && thumbRowOk && figsOk && placeholderOk
+          && hideOk && lockOk && appNameOk && versionOk && docOk && thumbRowOk && figsOk && placeholderOk
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && blockClickOk && plusHitOk
@@ -3795,7 +4081,7 @@ function runSmoke() {
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
           codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
-          hideOk, lockOk, appNameOk, versionOk, thumbRowOk, figsOk, placeholderOk, railOk,
+          hideOk, lockOk, appNameOk, versionOk, docOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
           hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoArrowOk,

@@ -21,7 +21,9 @@ import type { NoteMeta } from '../types';
  * ```
  */
 
-export const FM_KEYS = ['tags', 'pinned', 'archived', 'trashed', 'hidden', 'created', 'updated', 'order'] as const;
+export const FM_KEYS = [
+  'tags', 'pinned', 'archived', 'trashed', 'hidden', 'created', 'updated', 'order', 'doc', 'docsize'
+] as const;
 
 export interface ParsedFile {
   meta: Partial<NoteMeta>;
@@ -99,6 +101,17 @@ export function parseFrontMatter(raw: string): ParsedFile {
         listKey = null;
         break;
       }
+      case 'doc':
+        // 文档笔记挂着的那个真实文件（库内相对路径），值里可能带空格和点
+        if (val.trim()) meta.doc = String(parseScalar(val));
+        listKey = null;
+        break;
+      case 'docsize': {
+        const n = Number(String(parseScalar(val)));
+        if (Number.isFinite(n)) meta.docSize = n;
+        listKey = null;
+        break;
+      }
       default:
         listKey = null;
     }
@@ -129,6 +142,13 @@ export function serializeFrontMatter(meta: NoteMeta, body: string): string {
   }
   // hidden 同理：只有隐藏了才写这一行，绝大多数笔记的 front matter 保持原样
   if (meta.hidden) lines.push('hidden: true');
+  // 文档笔记：记下二进制在哪、多大。普通笔记一个字节都不多写
+  if (meta.doc) {
+    lines.push(`doc: ${meta.doc}`);
+    if (typeof meta.docSize === 'number' && Number.isFinite(meta.docSize)) {
+      lines.push(`docsize: ${Math.round(meta.docSize)}`);
+    }
+  }
   lines.push('---', '');
   return lines.join('\n') + body;
 }
