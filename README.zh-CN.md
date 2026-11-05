@@ -143,7 +143,7 @@ npm run desktop:shots  # 同上，但笔记库换成虚构的演示数据，专�
 | `link={"wiki":2,"todo":3,"add":2}` | 两个站内链接 / 三条待办 / 两个「＋」（只有写了缩进备注的那条没有） |
 | `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | 点链接那一行的**空白处**：光标从 0 落到 11，正好在这一行（10–25）里 —— 带链接的行照样点得进去 |
 | `linkJump="图片测试"` | **平点** `[[图片测试]]`（不带任何修饰键）直接跳过去（看的是中栏的选中卡片） |
-| `version=ok {"verText":"v0.1.9","app":"0.1.9"}` | 设置 → 数据 里显示的版本号，和 `package.json`（`app.getVersion()`）一致 |
+| `version=ok {"verText":"v0.2.0","app":"0.2.0"}` | 设置 → 数据 里显示的版本号，和 `package.json`（`app.getVersion()`）一致 |
 | `doc=ok {"dc":{"badge":"PDF","file":"smoke-doc.pdf","size":"8 B","title":"smoke-doc"},"dv":{…},"opened":["_docs/smoke-doc.pdf"],"existed":true,"gone":true}` | 把一个 PDF 拖进列表：卡片上有 PDF 徽标 / 文件名 / 体积，右栏出现文件面板（有「打开」「在文件夹中显示」、没有格式快捷条），双击卡片把路径交给系统（`doc_open` 记到了这一条），清空废纸篓后 `_docs/` 里的原件也没了 |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | 卡片路径逐级变短，到没有下级就整行不显示 |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | 目录拖拽换位，而且顺序写进了设置文件 |
