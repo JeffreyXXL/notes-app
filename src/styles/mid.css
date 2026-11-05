@@ -129,3 +129,41 @@ mark{background:var(--hl-hit);color:inherit;border-radius:2px;padding:0 1px}
   background:var(--accent);z-index:11;pointer-events:none}
 .swipe.drop-before::before{top:0}
 .swipe.drop-after::after{bottom:0}
+
+/* ============================================================
+   文档卡片：正文之外还挂着一个真实文件（PDF / Word / 压缩包…）
+   ============================================================ */
+.card-doc{display:flex;align-items:center;gap:8px;margin-top:2px;padding:7px 9px;min-width:0;
+  border-radius:8px;background:var(--chip-bg);border:1px solid var(--border-soft)}
+/* 类型徽标：光靠文件名后缀，一列扫下来很难分辨是 PDF 还是表格 */
+.doc-badge{flex:none;display:inline-flex;align-items:center;justify-content:center;
+  min-width:34px;height:19px;padding:0 5px;border-radius:4px;border:1px solid var(--border);
+  background:var(--bg-elev);color:var(--accent);
+  font-size:9.5px;font-weight:700;letter-spacing:.06em;line-height:1}
+.doc-file{flex:1;min-width:0;font-size:11.5px;color:var(--t3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-size{flex:none;font-size:10.5px;color:var(--t5);font-variant-numeric:tabular-nums}
+.card p.doc-note{margin-top:6px;color:var(--t4)}
+
+/* 按类型上色，只为了一眼分辨；不认识的后缀就走 accent */
+.doc-badge[data-ext="pdf"]{color:#c0504d}
+.doc-badge[data-ext="doc"],.doc-badge[data-ext="docx"],.doc-badge[data-ext="rtf"]{color:#2b579a}
+.doc-badge[data-ext="xls"],.doc-badge[data-ext="xlsx"],.doc-badge[data-ext="csv"]{color:#217346}
+.doc-badge[data-ext="ppt"],.doc-badge[data-ext="pptx"]{color:#c45a1e}
+.doc-badge[data-ext="zip"],.doc-badge[data-ext="rar"],.doc-badge[data-ext="7z"]{color:#7a5aa8}
+html[data-theme="dark"] .doc-badge[data-ext="pdf"]{color:#e0908c}
+html[data-theme="dark"] .doc-badge[data-ext="doc"],
+html[data-theme="dark"] .doc-badge[data-ext="docx"],
+html[data-theme="dark"] .doc-badge[data-ext="rtf"]{color:#8fb0e8}
+html[data-theme="dark"] .doc-badge[data-ext="xls"],
+html[data-theme="dark"] .doc-badge[data-ext="xlsx"],
+html[data-theme="dark"] .doc-badge[data-ext="csv"]{color:#7fbd93}
+html[data-theme="dark"] .doc-badge[data-ext="ppt"],
+html[data-theme="dark"] .doc-badge[data-ext="pptx"]{color:#e3a071}
+html[data-theme="dark"] .doc-badge[data-ext="zip"],
+html[data-theme="dark"] .doc-badge[data-ext="rar"],
+html[data-theme="dark"] .doc-badge[data-ext="7z"]{color:#b49ad8}
+
+/* 把文件拖到列表上时，整块列表亮一下，告诉用户「松手就收进来」 */
+.mid-list.dropping{background:var(--hover-soft);outline:2px dashed var(--accent);
+  outline-offset:-7px;border-radius:10px}

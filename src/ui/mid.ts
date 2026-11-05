@@ -1,11 +1,12 @@
 import { store, currentNotes, midTitle, trashedNotes, emptyTrash, selectNote, reorderNote } from '../store';
 import { esc, hl, excerpt, todoStats, allImages } from '../core/text';
-import { formatStamp } from '../core/time';
+import { formatStamp, formatBytes } from '../core/time';
 import { tagStyle } from '../core/tag-color';
 import { assetUrl } from '../core/image';
 import { ACT_ICON, ICON } from '../icons';
 import type { CardAction, Filter, Note } from '../types';
 import { doAction, openActions, newNote } from './actions';
+import { pickDocs, importDocFiles, openDoc, docFileName, docExt } from './docs';
 
 let emptyArmed = false;
 let emptyTimer: number | null = null;
@@ -99,10 +100,22 @@ function cardHTML(n: Note, q: string): string {
       + `</div>`
     : '';
 
+  // 文档笔记：正文往往是空的，卡片上真正要看的是「这是什么文件、多大」
+  const docBox = n.doc
+    ? `<div class="card-doc">
+        <span class="doc-badge" data-ext="${esc(docExt(n).toLowerCase())}">${esc(docExt(n))}</span>
+        <span class="doc-file">${hl(esc(docFileName(n)), q)}</span>
+        <span class="doc-size">${esc(formatBytes(n.docSize || 0))}</span>
+      </div>`
+    : '';
+
   // 有摘要就显示摘要；没有摘要但有图就只留图；
   // 两样都没有，给一句说明，别让卡片空一片 —— 这是「内容不显示」最直观的那一半
   let body: string;
-  if (ex) {
+  if (n.doc) {
+    // 备注写了就跟着露一行，没写就只留文件那一行
+    body = docBox + (ex ? `<p class="doc-note">${hl(esc(ex), q)}</p>` : '');
+  } else if (ex) {
     body = `<p>${hl(esc(ex), q)}</p>` + figs;
   } else if (figs) {
     body = figs;
@@ -110,7 +123,7 @@ function cardHTML(n: Note, q: string): string {
     body = '<p class="dim">空白笔记</p>';
   }
 
-  return `<div class="swipe" data-id="${esc(n.id)}" data-nacts="${acts.length}" data-pinned="${n.pinned ? 1 : 0}">
+  return `<div class="swipe" data-id="${esc(n.id)}" data-nacts="${acts.length}" data-pinned="${n.pinned ? 1 : 0}"${n.doc ? ' data-doc="1"' : ''}>
     <div class="swipe-acts">${actsHTML}</div>
     <div class="card ${store.state.selectedId === n.id ? 'active' : ''}">
       <div class="card-top">
@@ -354,6 +367,17 @@ function bindCards(box: HTMLElement): void {
       if (w.classList.contains('open')) { e.stopPropagation(); closeSwipe(w); return; }
       selectNote(id);
     });
+
+    // 文档：双击交给系统默认程序。单击还是「选中」，跟笔记完全一样 ——
+    // 只为了打开就抢走单击，会把「看看这篇写了什么」变成误触
+    if (w.dataset.doc === '1') {
+      card.title = '双击打开';
+      card.addEventListener('dblclick', e => {
+        e.preventDefault();
+        const n = currentNotes().find(x => x.id === id);
+        if (n) void openDoc(n);
+      });
+    }
   });
 
   // 图片被删掉 / 路径写错时别在卡片上留一个破图标，直接收走
@@ -362,6 +386,52 @@ function bindCards(box: HTMLElement): void {
   });
 
   syncFigs(box);
+}
+
+/* ============================================================
+   把文件拖进列表 → 收进笔记库当文档
+   ============================================================ */
+
+/**
+ * dragenter / dragleave 会随着指针划过子元素反复触发，
+ * 用计数器判断「真的离开了」，否则那块高亮框会一闪一闪。
+ */
+let dropDepth = 0;
+
+function bindListDrop(box: HTMLElement): void {
+  if (box.dataset.dropBound) return;
+  box.dataset.dropBound = '1';
+
+  const hasFiles = (e: DragEvent): boolean =>
+    !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+
+  box.addEventListener('dragenter', e => {
+    if (!hasFiles(e)) return;
+    dropDepth++;
+    box.classList.add('dropping');
+  });
+
+  box.addEventListener('dragover', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+
+  box.addEventListener('dragleave', () => {
+    dropDepth = Math.max(0, dropDepth - 1);
+    if (!dropDepth) box.classList.remove('dropping');
+  });
+
+  box.addEventListener('drop', e => {
+    dropDepth = 0;
+    box.classList.remove('dropping');
+    const files = e.dataTransfer ? [...e.dataTransfer.files] : [];
+    if (!files.length) return;
+    // 拦住，别让窗口级兜底再导一遍
+    e.preventDefault();
+    e.stopPropagation();
+    void importDocFiles(files);
+  });
 }
 
 /* ============================================================
@@ -384,8 +454,10 @@ function renderMidAction(f: Filter | null): void {
   // 归档 / 已隐藏都是「只读视图」，不给新建按钮
   if (isView && (f.value === 'archive' || f.value === 'hidden')) { box.innerHTML = ''; return; }
 
-  box.innerHTML = '<button class="btn sm" id="btn-new" title="新建笔记（Ctrl+N）">新建笔记</button>';
+  box.innerHTML = '<button class="btn sm" id="btn-new" title="新建笔记（Ctrl+N）">新建笔记</button>'
+    + '<button class="btn sm ghost" id="btn-doc" title="把 PDF / Word / 任意文件收进笔记库">添加文档</button>';
   box.querySelector('#btn-new')?.addEventListener('click', () => { void newNote(); });
+  box.querySelector('#btn-doc')?.addEventListener('click', () => { void pickDocs(); });
 }
 
 /** 清空废纸篓：两段式确认，避免误删 */
@@ -419,6 +491,7 @@ export function renderMid(): void {
 
   const box = document.getElementById('mid-list');
   if (!box) return;
+  bindListDrop(box);
 
   // 列表还是那一批（reload 之后每次都会整列重绘）：把滚动位置带过去。
   // 换了目录 / 标签 / 搜索词就回到顶部，那才是用户预期的位置。

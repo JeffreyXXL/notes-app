@@ -52,7 +52,9 @@ function toNote(f: RawFile): Note {
     hidden: !!meta.hidden,
     created: meta.created ?? f.mtime,
     updated: meta.updated ?? f.mtime,
-    order: typeof meta.order === 'number' ? meta.order : undefined
+    order: typeof meta.order === 'number' ? meta.order : undefined,
+    doc: meta.doc,
+    docSize: meta.docSize
   };
 }
 
@@ -66,7 +68,9 @@ function toRaw(n: Note): string {
       hidden: n.hidden,
       created: n.created,
       updated: n.updated,
-      order: n.order
+      order: n.order,
+      doc: n.doc,
+      docSize: n.docSize
     },
     n.content
   );
@@ -415,8 +419,73 @@ export async function createNote(): Promise<Note | null> {
   return note;
 }
 
-/** 修改正文：只更新内存 + 防抖写盘，不触发重绘（编辑器自己维护视图） */
-export function setNoteContent(note: Note, content: string): void {
+/**
+ * 新建一篇「文档笔记」。
+ *
+ * 文件本身已经由主进程复制进 `_docs/` 了，这里只建外面那层 `.md` 壳：
+ * 目录、标签、置顶、归档、搜索、排序、废纸篓 —— 全都是现成的，不用再造一套。
+ * 壳的正文留空，用户可以往里写备注。
+ */
+export async function createDocNote(input: {
+  docPath: string;
+  name: string;
+  size: number;
+}): Promise<Note | null> {
+  const storage = store.storage;
+  if (!storage) return null;
+  if (store.state.filter && store.state.filter.type === 'view') store.state.filter = null;
+
+  const f = store.state.filter;
+  const folder = f && f.type === 'folder' ? f.value : DEFAULT_FOLDER;
+  const tags = f && f.type === 'tag' ? [f.value] : [];
+
+  const title = input.name.replace(/\.[^.]+$/, '').trim() || '文档';
+  const existing = new Set(store.notes.map(n => n.relPath.toLowerCase()));
+  const relPath = uniquePath(existing, folder, title);
+  const now = Date.now();
+
+  let minOrder = Number.POSITIVE_INFINITY;
+  for (const n of store.notes) {
+    if (typeof n.order === 'number' && n.order < minOrder) minOrder = n.order;
+  }
+  const order = Number.isFinite(minOrder) ? minOrder - ORDER_STEP : ORDER_STEP;
+
+  await storage.write(relPath, serializeFrontMatter(
+    {
+      tags, pinned: false, archived: false, trashed: false, hidden: false,
+      created: now, updated: now, order,
+      doc: input.docPath, docSize: input.size
+    },
+    ''
+  ));
+
+  const note: Note = {
+    id: relPath,
+    relPath,
+    folder,
+    name: baseName(relPath),
+    content: '',
+    title,
+    mtime: now,
+    tags,
+    pinned: false,
+    archived: false,
+    trashed: false,
+    hidden: false,
+    created: now,
+    updated: now,
+    order,
+    doc: input.docPath,
+    docSize: input.size
+  };
+  store.notes.unshift(note);
+  store.state.selectedId = note.id;
+  store.state.search = '';
+  emitChange();
+  return note;
+}
+
+/** 修改正文：只更新内存 + 防抖写盘，不触发重绘（编辑器自己维护视图） */export function setNoteContent(note: Note, content: string): void {
   note.content = content;
   note.title = titleOf(content, note.name);
   note.updated = Date.now();
@@ -798,14 +867,32 @@ export async function restoreNote(note: Note): Promise<void> {
   emitChange();
 }
 
-export async function purgeNote(note: Note): Promise<void> {
-  const storage = store.storage;
-  if (!storage) return;
+/**
+ * 彻底删除一篇笔记（连带它挂着的原件）。
+ *
+ * 文档笔记删了壳，`_docs/` 里那份二进制就成了谁也打不开的孤儿，
+ * 所以一起收走；但同一个文件可能被复制出来的两篇笔记指着，
+ * 还有人指着就先留着。
+ */
+async function removeNoteFiles(note: Note): Promise<void> {
   try {
-    await storage.remove(note.relPath);
+    await store.storage?.remove(note.relPath);
   } catch (err) {
-    console.error('[notes-app] 删除文件失败', err);
+    console.error('[notes-app] 删除文件失败', note.relPath, err);
   }
+
+  if (!note.doc) return;
+  if (store.notes.some(n => n !== note && n.doc === note.doc)) return;
+  try {
+    await store.storage?.remove(note.doc);
+  } catch (err) {
+    console.error('[notes-app] 删除文档失败', note.doc, err);
+  }
+}
+
+export async function purgeNote(note: Note): Promise<void> {
+  if (!store.storage) return;
+  await removeNoteFiles(note);
   const i = store.notes.indexOf(note);
   if (i >= 0) store.notes.splice(i, 1);
   if (store.state.selectedId === note.id) store.state.selectedId = null;
@@ -817,13 +904,7 @@ export async function emptyTrash(): Promise<void> {
   const list = trashedNotes();
   if (!list.length) return;
 
-  for (const n of list) {
-    try {
-      await store.storage?.remove(n.relPath);
-    } catch (err) {
-      console.error('[notes-app] 删除文件失败', n.relPath, err);
-    }
-  }
+  for (const n of list) await removeNoteFiles(n);
 
   const ids = new Set(list.map(n => n.id));
   store.notes = store.notes.filter(n => !ids.has(n.id));

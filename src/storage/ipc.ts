@@ -9,6 +9,11 @@ export interface NotesBridge {
   invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
   /** 只在 Electron 下存在 */
   platform?: string;
+  /**
+   * 拖进来的 File → 磁盘真实路径（Electron 32+ 只有 webUtils 能给）。
+   * 拿不到就返回空串，调用方退回「读成 base64 再传」。
+   */
+  pathForFile?(file: File): string;
   onWinState?(cb: (isMax: boolean) => void): void;
 }
 

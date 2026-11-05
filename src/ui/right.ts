@@ -3,12 +3,13 @@ import { mount, setSearch, setImageBase } from '../editor';
 import type { EditorView } from '../editor';
 import { Transaction } from '@codemirror/state';
 import { esc, countHits } from '../core/text';
-import { formatStamp } from '../core/time';
+import { formatStamp, formatBytes } from '../core/time';
 import { tagStyle } from '../core/tag-color';
 import type { Note } from '../types';
 import { renderMid } from './mid';
 import { quickbarHTML, bindQuickbar } from './quickbar';
 import { openNoteLink } from './links';
+import { docFileName, docExt, openDoc, revealDoc } from './docs';
 
 let editorView: EditorView | null = null;
 let editorNote: Note | null = null;
@@ -53,6 +54,29 @@ function destroyEditor(): void {
   if (editorView) { editorView.destroy(); editorView = null; }
   editorNote = null;
   editorKey = null;
+}
+
+/**
+ * 文档笔记顶上那块文件面板。
+ *
+ * 不预览文件内容：PDF / Word / Excel 各有各的渲染器，硬塞进来只会
+ * 「有的能看有的打不开」。交给系统默认程序，行为永远一致。
+ * 下面留着的编辑器是给这篇文档写备注用的。
+ */
+function docPanelHTML(note: Note): string {
+  const ext = docExt(note);
+  const size = formatBytes(note.docSize || 0);
+  return `<div class="doc-view">
+    <span class="doc-badge big" data-ext="${esc(ext.toLowerCase())}">${esc(ext)}</span>
+    <div class="dv-meta">
+      <div class="dv-name">${esc(docFileName(note))}</div>
+      <div class="dv-sub">${esc(ext)} · ${esc(size)} · 原件存在笔记库的 _docs 里</div>
+    </div>
+    <div class="dv-acts">
+      <button class="btn sm primary" id="dv-open">打开</button>
+      <button class="btn sm ghost" id="dv-reveal">在文件夹中显示</button>
+    </div>
+  </div>`;
 }
 
 /**
@@ -116,9 +140,10 @@ export function renderRight(): void {
   const keepTop = editorKey === note.id && editorView ? editorView.scrollDOM.scrollTop : 0;
 
   destroyEditor();
+  const isDoc = !!note.doc;
   col.innerHTML = `<div class="doc-head">${headHTML(note)}</div>
-    <div class="doc-body"><div id="editor-host"></div></div>
-    ${quickbarHTML()}`;
+    <div class="doc-body${isDoc ? ' has-doc' : ''}">${isDoc ? docPanelHTML(note) : ''}<div id="editor-host"></div></div>
+    ${isDoc ? '' : quickbarHTML()}`;
 
   const host = document.getElementById('editor-host');
   if (!host) return;
@@ -143,7 +168,15 @@ export function renderRight(): void {
   editorKey = note.id;
   if (keepTop) editorView.scrollDOM.scrollTop = keepTop;
   setSearch(editorView, store.state.search.trim(), true);
-  bindQuickbar(editorView);
+
+  if (isDoc) {
+    // 文档笔记的编辑器只是「备注」，没有格式工具条
+    const cur = () => noteById(note.id) ?? note;
+    col.querySelector('#dv-open')?.addEventListener('click', () => { void openDoc(cur()); });
+    col.querySelector('#dv-reveal')?.addEventListener('click', () => { void revealDoc(cur()); });
+  } else {
+    bindQuickbar(editorView);
+  }
 }
 
 /** 搜索词变化时同步右栏高亮（不重建编辑器） */
