@@ -134,16 +134,17 @@ npm run desktop:shots  # 同上，但笔记库换成虚构的演示数据，专�
 | `preview=cards4 blank0 thumbs1` | 卡片预览：没有空白卡，至少一张缩略图 |
 | `crlf="这一行是正文…"` | CRLF 写的笔记摘要也能提取出来（这条守住过一个真 bug） |
 | `imgEdit=0/1` | **双击**图片退回源码行 |
+| `imgDel=ok {"before":{"sel":1,"imgs":1,"lines":9},"after":{"imgs":0,"lines":8}}` | 点图片选中后按 Delete：图片和它那一行一起没了（行数 −1）。以前按了没反应 —— 点图时 `mousedown` 被拦下，编辑器没拿到焦点，按键根本到不了 |
 | `imgCopy=ok clip=600x220` | 点工具条上的「复制」后，系统剪贴板里真的是一张 600×220 的图（读的是 Electron 的 `clipboard.readImage()`）。沙箱 / 非交互会话里系统剪贴板不可用时多打一个 `clipUnavailable`，这时只验「应用侧认为成功」 |
 | `imgPasteFile=… size=70` | 粘贴的图真的落到了磁盘上 |
 | `tagTints=8/8` / `grip=open1 close0` | 标签配色不撞 / `···` 单击展开收起 |
 | `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | 两个代码块都渲染出来，语言标签对，关键字 / 字符串 / 注释 / 函数名都染上色；**代码里的表格没被当成表格** |
 | `codeClick=1/2` | **单击代码块就把光标放进去**（少一个块、多两行围栏）。以前单击什么都不做，用户报「这几行点不进去」 |
-| `blockClick=ok {"blocks":0,"fences":2}` | 同上，换一篇笔记独立再验一次 |
+| `codeSel=ok {"widest":[659,1389,730],"line":[659,1389,730],"blend":"multiply","layerKids":3}` | 选中整段代码块时，**选区矩形和代码行一样宽**（左边 659、右边 1389）。以前正文的左右留白走 `padding`，选区按内容框算，比行宽多出两侧各 56px，代码行有底色把中间盖住，只剩两条竖色带露在外面 —— 就是「代码块选中样式奇怪」 |
 | `link={"wiki":2,"todo":3,"add":2}` | 两个站内链接 / 三条待办 / 两个「＋」（只有写了缩进备注的那条没有） |
 | `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | 点链接那一行的**空白处**：光标从 0 落到 11，正好在这一行（10–25）里 —— 带链接的行照样点得进去 |
 | `linkJump="图片测试"` | **平点** `[[图片测试]]`（不带任何修饰键）直接跳过去（看的是中栏的选中卡片） |
-| `version=ok {"verText":"v0.2.0","app":"0.2.0"}` | 设置 → 数据 里显示的版本号，和 `package.json`（`app.getVersion()`）一致 |
+| `version=ok {"verText":"v0.2.1","app":"0.2.1"}` | 设置 → 数据 里显示的版本号，和 `package.json`（`app.getVersion()`）一致 |
 | `doc=ok {"dc":{"badge":"PDF","file":"smoke-doc.pdf","size":"8 B","title":"smoke-doc"},"dv":{…},"opened":["_docs/smoke-doc.pdf"],"existed":true,"gone":true}` | 把一个 PDF 拖进列表：卡片上有 PDF 徽标 / 文件名 / 体积，右栏出现文件面板（有「打开」「在文件夹中显示」、没有格式快捷条），双击卡片把路径交给系统（`doc_open` 记到了这一条），清空废纸篓后 `_docs/` 里的原件也没了 |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | 卡片路径逐级变短，到没有下级就整行不显示 |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | 目录拖拽换位，而且顺序写进了设置文件 |
@@ -160,6 +161,7 @@ npm run desktop:shots  # 同上，但笔记库换成虚构的演示数据，专�
 | `noteMulti=ok n=2 first="…cm-todonote-first" last="…cm-todonote-last"` | 缩进写的两行备注拼成**一块**：首行只挂 `-first`、末行只挂 `-last`，都有底色和左右边框；点最后一行光标落在那一行 |
 | `noteEnter=ok s1=prevented s2=prevented tail="- [ ] 甲\n  备注一\n  备注二"` | Shift-Enter 起一行备注、回车在备注里继续换行，缩进照抄 —— 备注是**多行**的 |
 | `noteStyle=ok {"noteLh":27.55,"bodyLh":27.55,"gapPad":"10px"}` | 备注里的行高和正文量出来是同一个像素值（以前写死 `1.65`，比正文紧）；框下面那一行挂着 `cm-todonote-gap`、`padding-top` 是 `10px` |
+| `marker=ok {"boxes0":3,"inText":{"boxes":3,"text":"还没写备注的任务＋"},"atMark":{"boxes":2,"text":"- [ ] 还没写备注的任务"}}` | 光标落在待办正文里时，勾选框还在（3 个）、行里看不到 `- [ ]`；光标退到行首贴着标记时，勾选框让位、源码露出来（2 个）。以前点一下正文整行就变回 `- [ ] xxx`，跟上下渲染好的条目对不上 |
 | `plusHit=ok pointerEvents=none` | 待办行尾那个隐形的「＋」不接事件，不会把行尾 22px 变成死区 |
 | `qbEnd=ok line=- [ ] …Zend` | 点待办按钮后光标落在行尾，接着打的字接在最后 |
 | `prune oldGone=true newThere=true` | 改名后旧目录（含里面的空子目录）真的被收走 |

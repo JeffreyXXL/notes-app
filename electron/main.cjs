@@ -1310,7 +1310,9 @@ function runSmoke() {
         let noteMultiOk = false;
         let noteStyleOk = false;
         let noteEnterOk = false;
-        let blockClickOk = false;
+        // 第 63 轮：行首标记只在光标贴着它时露源码；选中图片可以直接 Delete
+        let markerOk = false;
+        let imgDelOk = false;
         let plusHitOk = false;
         let qbEndOk = false;
         // 第 46 轮：链接走蓝色系、带完整目录、面包屑字号
@@ -1677,11 +1679,24 @@ function runSmoke() {
           await undo();
 
           // ② 双击选中一个词再点粗体：应该包住这个词，而不是在光标处插占位词
-          await clickBox(linePt);
-          await wait(200);
-          await clickBox(linePt, 2);
-          await wait(350);
-          const word = String(await js("getSelection().toString()")).trim();
+          // 用编辑器 API 选中一个词。这里要验的是「**有选区**时点粗体是包住选区，
+          // 而不是在光标处插占位词」—— 双击选词本身在无头/无焦点环境里不稳，
+          // 那是另一件事，不该让它决定这条断言的成败
+          const word = String(await js(`(()=>{
+            const ed = window.__editor, doc = ed.state.doc;
+            for (let i = 1; i <= doc.lines; i++) {
+              const t = doc.line(i).text;
+              const m = /[^\\s*_#\\[\\]()>-]{3,}/.exec(t);
+              if (m) {
+                ed.focus();
+                ed.dispatch({ selection: { anchor: doc.line(i).from + m.index,
+                                           head: doc.line(i).from + m.index + m[0].length } });
+                return m[0];
+              }
+            }
+            return '';
+          })()`)).trim();
+          await wait(250);
           await clickBox(qbPt('bold'));
           await wait(450);
           // 别去翻「第一个 .cm-strong」—— 正文里本来就有加粗的字。
@@ -1712,12 +1727,13 @@ function runSmoke() {
           // 不然点完还得自己按一次 End 才能开始写，正是这一条报上来的
           await clickBox(linePt);
           await wait(300);
-          const beforeLine = String(await js(`(()=>{
-            const s = getSelection();
-            const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
-            const line = el && el.closest ? el.closest('.cm-line') : null;
-            return line ? line.textContent : '';
-          })()`));
+          // 读**文档**里的那一行，不读 DOM 文本：光标落进待办行以后，
+          // 行首的 `- [ ]` 不再露源码（渲染成勾选框），DOM 文本里就没有它了
+          const docLineAtCaret = `(()=>{
+            const ed = window.__editor;
+            return ed.state.doc.lineAt(ed.state.selection.main.head).text;
+          })()`;
+          const beforeLine = String(await js(docLineAtCaret));
           await clickBox(qbPt('todo'));
           await wait(500);
           await js(`(() => {
@@ -1726,12 +1742,7 @@ function runSmoke() {
             document.execCommand('insertText', false, 'Zend');
           })()`);
           await wait(400);
-          const lineAfter = String(await js(`(()=>{
-            const s = getSelection();
-            const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
-            const line = el && el.closest ? el.closest('.cm-line') : null;
-            return line ? line.textContent : '';
-          })()`));
+          const lineAfter = String(await js(docLineAtCaret));
           // 前缀加上了，而且刚打的字接在最后 —— 说明光标真的在行尾
           qbEndOk = lineAfter.startsWith('- [ ] ') && lineAfter.endsWith('Zend')
             && lineAfter.length > beforeLine.length;
@@ -1740,7 +1751,12 @@ function runSmoke() {
           await undo();
           await undo();
 
-          // ④ 切到后台再回来：正文不能跳回文章开头
+          // ④ 切到后台再回来：正文不能跳回文章开头。
+          // 这页内容常常撑不满一屏（scrollHeight == clientHeight），滚不动就
+          // 什么也验不出来 —— 先灌一段填充文本把它顶出滚动条，测完撤销
+          await js(`(()=>{ const ed = window.__editor;
+            ed.dispatch({ changes: { from: 0, insert: 'fill\\n'.repeat(60) } }); })()`);
+          await wait(400);
           await js("document.querySelector('#editor-host .cm-scroller').scrollTop = 260");
           await wait(300);
           const top0 = Number(await js("document.querySelector('#editor-host .cm-scroller').scrollTop"));
@@ -1749,6 +1765,7 @@ function runSmoke() {
           win.show();
           await wait(1600);
           const top1 = Number(await js("document.querySelector('#editor-host .cm-scroller').scrollTop"));
+          await js("window.__editor.dispatch({ changes: { from: 0, to: 300 } })");
           keepScrollOk = top0 > 100 && Math.abs(top1 - top0) < 4;
           console.log('SMOKE keepScroll=' + (keepScrollOk ? 'ok' : 'bad') + ' ' + top0 + '->' + top1);
         } catch (err) {
@@ -2488,6 +2505,54 @@ function runSmoke() {
             console.log('SMOKE imgCaretFailed=' + err.message);
           }
 
+          // 选中图片后按 Delete：整行删掉（连换行）。以前按了完全没反应 ——
+          // 点图片时 mousedown 被拦下来，编辑器没拿到焦点，按键根本到不了
+          try {
+            const ip = await js(`(()=>{
+              const im = document.querySelector('.cm-img img');
+              if (!im) return null;
+              im.scrollIntoView({ block: 'center' });
+              const r = im.getBoundingClientRect();
+              return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+            })()`);
+            if (!ip) throw new Error('noimg');
+
+            win.webContents.sendInputEvent({ type: 'mouseDown', x: ip.x, y: ip.y, button: 'left', clickCount: 1 });
+            win.webContents.sendInputEvent({ type: 'mouseUp', x: ip.x, y: ip.y, button: 'left', clickCount: 1 });
+            await wait(400);
+
+            const before = JSON.parse(String(await js(`(()=>JSON.stringify({
+              sel: document.querySelectorAll('.cm-img.selected').length,
+              imgs: document.querySelectorAll('.cm-img').length,
+              lines: window.__editor.state.doc.lines,
+              bang: window.__editor.state.doc.toString().split('![').length - 1
+            }))()`)));
+
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Delete' });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Delete' });
+            await wait(400);
+
+            const after = JSON.parse(String(await js(`(()=>JSON.stringify({
+              imgs: document.querySelectorAll('.cm-img').length,
+              lines: window.__editor.state.doc.lines,
+              bang: window.__editor.state.doc.toString().split('![').length - 1
+            }))()`)));
+
+            imgDelOk = before.sel === 1
+              && after.imgs === before.imgs - 1
+              && after.lines === before.lines - 1
+              && after.bang === before.bang - 1;
+            console.log('SMOKE imgDel=' + (imgDelOk ? 'ok' : 'bad') + ' ' +
+              JSON.stringify({ before, after }));
+
+            // 撤销回去：后面还要用这张图
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
+            await wait(600);
+          } catch (err) {
+            console.log('SMOKE imgDelFailed=' + err.message);
+          }
+
           // 粘贴图片：合成一个带图片文件的 paste 事件，走完整的「落盘 + 插入」链路。
           // 这是没法用真鼠标点的部分（系统文件选择框脚本点不了），只能这么验。
           const pasted = await js(`(async () => {
@@ -2528,6 +2593,7 @@ function runSmoke() {
            ============================================================ */
 
         let codeOk = false;
+        let codeSelOk = false;
         let linkOk = false;
         let versionOk = false;
         let docOk = false;
@@ -2575,50 +2641,12 @@ function runSmoke() {
           return true;
         };
 
-        // 第 53 轮：①单击代码块就该进去。以前只认双击，单击完全没反应，
-        // 看起来就是「这几行点不进去、光标也进不去」，而双击这个约定没人猜得到。
-        // ②待办行尾那个隐形的「＋」不能再吃掉点击 —— 它 opacity:0 但仍然接事件，
+        // 待办行尾那个隐形的「＋」不能吃掉点击 —— 它 opacity:0 但仍然接事件，
         // 点行尾会插一个「→」而不是把光标放到行尾
+        // （点代码块进去这条由下面的 codeClick 验，那篇笔记一定在库里）
         try {
           await js("document.querySelector('.row[data-clear]').click()");
           await wait(350);
-          await openNote('Markdown 语法速查');
-          await wait(900);
-          win.show();
-          win.focus();
-          await wait(400);
-
-          const boxOf = async expr => {
-            const s = String(await js(`(()=>{
-              const el = document.querySelector(${JSON.stringify(expr)});
-              if (!el) return '';
-              el.scrollIntoView({ block: 'center' });
-              const r = el.getBoundingClientRect();
-              if (r.bottom > innerHeight - 190 || r.top < 80) return '';
-              return JSON.stringify({
-                x: Math.round(r.left + Math.min(40, r.width / 2)),
-                y: Math.round(r.top + r.height / 2)
-              });
-            })()`));
-            return s ? JSON.parse(s) : null;
-          };
-          await wait(250);
-
-          const cb = await boxOf('.cm-codeblock pre');
-          if (cb) {
-            win.webContents.sendInputEvent({ type: 'mouseDown', x: cb.x, y: cb.y, button: 'left', clickCount: 1 });
-            win.webContents.sendInputEvent({ type: 'mouseUp', x: cb.x, y: cb.y, button: 'left', clickCount: 1 });
-            await wait(500);
-          }
-          // 整块散成源码围栏行 = 光标真的进到块里了
-          const afterClick = JSON.parse(String(await js(`(()=>JSON.stringify({
-            blocks: document.querySelectorAll('.cm-codeblock').length,
-            fences: document.querySelectorAll('#editor-host .cm-fence').length
-          }))()`)));
-          blockClickOk = !!cb && afterClick.blocks === 0 && afterClick.fences >= 2;
-          console.log('SMOKE blockClick=' + (blockClickOk ? 'ok' : 'bad') + ' ' +
-            JSON.stringify(afterClick));
-
           // 鼠标挪到左栏，确保待办行没被 hover（hover 时才该接事件）
           win.webContents.sendInputEvent({ type: 'mouseMove', x: 12, y: 300 });
           await wait(250);
@@ -2629,7 +2657,7 @@ function runSmoke() {
           plusHitOk = pe === 'none';
           console.log('SMOKE plusHit=' + (plusHitOk ? 'ok' : 'bad') + ' pointerEvents=' + pe);
         } catch (err) {
-          console.log('SMOKE blockClickFailed=' + err.message);
+          console.log('SMOKE plusHitFailed=' + err.message);
         }
 
         // ① 代码块：整块渲染 + 语法高亮 + 代码里的表格不能被认成表格
@@ -2677,6 +2705,67 @@ function runSmoke() {
           console.log('SMOKE codeClick=' + clickState);
           // 少一个块、围栏行出现两行 = 光标真的进去了
           codeOk = codeOk && String(clickState) === '1/2';
+
+          // 选中整个代码块：选区矩形必须跟代码行**等宽**。
+          // 以前 .cm-content 的左右留白走 padding，浏览器按内容框给跨行选区
+          // 算矩形，比行宽多出两侧各 56px —— 代码行自己有底色把中间盖住，
+          // 于是只剩两条竖着的色带露在外面，看着像样式坏了
+          try {
+            const f = JSON.parse(String(await js(`(()=>{ try {
+              const ed = window.__editor;
+              const doc = ed.state.doc;
+              let s = -1, e = -1;
+              for (let i = 1; i <= doc.lines; i++) {
+                if (/^\\s*\`\`\`/.test(doc.line(i).text)) { if (s < 0) s = i; else { e = i; break; } }
+              }
+              if (e < 0) return JSON.stringify({ err: 'nofence' });
+              ed.focus();
+              ed.dispatch({ selection: { anchor: doc.line(s).from, head: doc.line(e).to } });
+              return JSON.stringify({ s, e });
+            } catch (err) { return JSON.stringify({ err: String(err) }); } })()`)));
+            if (f.err) throw new Error(f.err);
+
+            // 选区图层要等一次重绘才落 DOM。窗口没有前台焦点时 Chromium 会
+            // 把帧掐掉，所以这里主动抓一帧把它逼出来
+            await win.webContents.capturePage();
+            await wait(300);
+
+            const geo = JSON.parse(String(await js(`(()=>{ try {
+              const R = el => { const r = el.getBoundingClientRect(); return [r.left, r.right, r.width]; };
+              const layer = document.querySelector('.cm-selectionLayer');
+              const kids = layer ? [...layer.children].map(el => R(el)) : [];
+              const line = document.querySelector('#editor-host .cm-line.cm-codeline');
+              const content = document.querySelector('#editor-host .cm-content');
+              const cs = content ? getComputedStyle(content) : null;
+              return JSON.stringify({
+                kids,
+                line: line ? R(line) : null,
+                blend: layer ? getComputedStyle(layer).mixBlendMode : null,
+                focused: window.__editor.hasFocus,
+                docFocus: document.hasFocus(),
+                layerKids: layer ? layer.childElementCount : -1,
+                padL: cs ? cs.paddingLeft : null,
+                padR: cs ? cs.paddingRight : null
+              });
+            } catch (err) { return JSON.stringify({ err: String(err) }); } })()`)));
+            if (geo.err) throw new Error(geo.err);
+
+            // 取最宽的那块选区矩形（就是代码块本身那几行）
+            const widest = geo.kids.slice().sort((a, b) => b[2] - a[2])[0];
+            // ① 内容框左右没有留白 —— 选区矩形就是按它算的，留白为 0 才不会外扩
+            // ② 真画出来的话，左右边界要跟代码行对齐（允许 1px 取整误差）
+            codeSelOk = geo.padL === '0px' && geo.padR === '0px' && geo.blend === 'multiply'
+              && (!widest || (!!geo.line
+                && Math.abs(widest[0] - geo.line[0]) <= 1
+                && Math.abs(widest[1] - geo.line[1]) <= 1));
+            console.log('SMOKE codeSel=' + (codeSelOk ? 'ok' : 'bad') + ' ' + JSON.stringify({
+              widest: widest && widest.map(Math.round),
+              line: geo.line && geo.line.map(Math.round),
+              blend: geo.blend, layerKids: geo.layerKids
+            }));
+          } catch (err) {
+            console.log('SMOKE codeSelFailed=' + err.message);
+          }
         } catch (err) {
           console.log('SMOKE codeFailed=' + err.message);
         }
@@ -2808,6 +2897,52 @@ function runSmoke() {
               ' ' + JSON.stringify(ns));
           } catch (err) {
             console.log('SMOKE noteStyleFailed=' + err.message);
+          }
+
+          // 行首标记只在光标**贴着标记**时露源码。
+          // 以前光标落进这一行任何位置，整行立刻变回 `- [ ] xxx` ——
+          // 点一下待办正文，这条就跟上下已经渲染好的条目对不上，看着像坏了
+          try {
+            const mk = JSON.parse(String(await js(`(()=>{ try {
+              const ed = window.__editor;
+              const doc = ed.state.doc;
+              let line = null;
+              for (let n = 1; n <= doc.lines; n++) {
+                if (doc.line(n).text.includes('还没写备注的任务')) { line = doc.line(n); break; }
+              }
+              if (!line) return JSON.stringify({ err: 'noline' });
+              const el = () => [...document.querySelectorAll('#editor-host .cm-line')]
+                .find(x => String(x.textContent).includes('还没写备注的任务'));
+              const boxes0 = document.querySelectorAll('.todo-box').length;
+
+              // ① 光标落在正文中间（离标记很远）
+              ed.dispatch({ selection: { anchor: line.from + 8 } });
+              const inText = {
+                boxes: document.querySelectorAll('.todo-box').length,
+                text: String((el() || {}).textContent || '')
+              };
+
+              // ② 光标退到行首，贴着行首标记
+              ed.dispatch({ selection: { anchor: line.from } });
+              const atMark = {
+                boxes: document.querySelectorAll('.todo-box').length,
+                text: String((el() || {}).textContent || '')
+              };
+
+              // 复位：光标挪回标题行，截图里待办还是渲染好的样子
+              ed.dispatch({ selection: { anchor: 0 } });
+              return JSON.stringify({ boxes0, inText, atMark });
+            } catch (e) { return JSON.stringify({ err: String(e && e.stack || e) }); } })()`)));
+            if (mk.err) throw new Error(mk.err);
+
+            // 光标在正文里：勾选框还在、行里看不到 `- [ ]`；
+            // 光标退到行首：勾选框让位、`- [ ]` 露出来
+            markerOk = mk.boxes0 === 3
+              && mk.inText.boxes === 3 && !mk.inText.text.includes('- [ ]')
+              && mk.atMark.boxes === 2 && mk.atMark.text.includes('- [ ]');
+            console.log('SMOKE marker=' + (markerOk ? 'ok' : 'bad') + ' ' + JSON.stringify(mk));
+          } catch (err) {
+            console.log('SMOKE markerFailed=' + err.message);
           }
 
           // 截图：待办的缩进备注（框）和行尾的「＋」
@@ -4069,23 +4204,24 @@ function runSmoke() {
         const ok = cards > 0 && lines > 0 && bridge === 'object' && errs.length === 0
           && blankOk && imgOk && imgPickOk && imgBoxOk && imgResizeOk && imgEditOk && imgPasteOk
           && tagOk && renameOk && pinOk && orderOk && previewOk
-          && codeOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
+          && codeOk && codeSelOk && linkOk && cardPathOk && leftOrderOk && pruneOk && titleRenameOk
           && hideOk && lockOk && appNameOk && versionOk && docOk && thumbRowOk && figsOk && placeholderOk
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
-          && hlEachOk && blockClickOk && plusHitOk
+          && hlEachOk && plusHitOk
           && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk
           && imgCaretOk && collapseOk && todoArrowOk && noteMultiOk && noteStyleOk && noteEnterOk
+          && markerOk && imgDelOk
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
         console.log('SMOKE verdict=' + JSON.stringify({
           blankOk, imgOk, imgPickOk, imgBoxOk, imgResizeOk, imgEditOk, imgPasteOk,
           tagOk, renameOk, pinOk, orderOk, previewOk,
-          codeOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
+          codeOk, codeSelOk, linkOk, cardPathOk, leftOrderOk, pruneOk, titleRenameOk,
           hideOk, lockOk, appNameOk, versionOk, docOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
-          hlEachOk, blockClickOk, plusHitOk, hlEmptyOk, imgClick2Ok,
+          hlEachOk, plusHitOk, hlEmptyOk, imgClick2Ok,
           hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoArrowOk,
-          noteMultiOk, noteStyleOk, noteEnterOk,
+          noteMultiOk, noteStyleOk, noteEnterOk, markerOk, imgDelOk,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));
         app.exit(ok ? 0 : 1);

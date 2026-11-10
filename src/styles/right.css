@@ -26,6 +26,15 @@
 #editor-host .cm-content{caret-color:var(--t1)}
 #editor-host .cm-cursor,#editor-host .cm-dropCursor{border-left-color:var(--t1)}
 #editor-host .cm-selectionBackground{background:var(--sel-cm) !important}
+/* 选区画在正文**之上**，靠混合模式压住颜色：
+   代码块、待办备注框这些自带背景的行，选区画在下面会被背景整个盖住 ——
+   看得见的两条边其实只是漏到内容留白里的部分。提到上面又会让文字被
+   纯色糊住，所以用 multiply（暗色主题用 screen）：浅色选区只压暗背景，
+   对深色文字几乎没影响，于是「背景有颜色的地方」也看得见选区 */
+/* z-index 得带 !important：CodeMirror 是在 JS 里给图层写**行内** z-index 的
+   （`layer.above ? 150 : -1 - pos`），样式表不加重会被行内值压掉 */
+#editor-host .cm-selectionLayer{z-index:1 !important;mix-blend-mode:multiply}
+html[data-theme="dark"] #editor-host .cm-selectionLayer{mix-blend-mode:screen}
 #editor-host .cm-scroller::-webkit-scrollbar{width:10px}
 #editor-host .cm-scroller::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:9px;
   border:3px solid transparent;background-clip:content-box}
@@ -236,11 +245,18 @@ body.img-resizing *{cursor:nwse-resize!important;user-select:none!important}
 .hl-type{color:var(--hl-type)}
 .hl-punc{color:var(--hl-punc)}
 
-/* todo 复选框 */
-.todo-box{appearance:none;-webkit-appearance:none;width:15px;height:15px;border:1.5px solid var(--t5);
+/* todo 复选框
+   没勾的也要一眼看见：以前是 1.5px 的灰边框，混在正文里几乎看不出
+   「这一条还没做」。现在没勾的是蓝框 + 淡蓝底（跟链接同一个蓝，
+   读作「待处理」），勾上的是实心 accent —— 两种状态靠**色相**区分，
+   不靠深浅，所以眯着眼看也能分出哪几条还没做 */
+.todo-box{appearance:none;-webkit-appearance:none;width:15px;height:15px;
+  border:1.6px solid color-mix(in srgb, var(--link) 88%, transparent);
+  background:color-mix(in srgb, var(--link) 13%, transparent);
   border-radius:4.5px;margin:0 9px 0 0;vertical-align:0;cursor:pointer;position:relative;flex:none;
   transition:background .14s,border-color .14s}
-.todo-box:hover{border-color:var(--t3)}
+.todo-box:hover{border-color:var(--link);
+  background:color-mix(in srgb, var(--link) 22%, transparent)}
 .todo-box:checked{background:var(--accent);border-color:var(--accent)}
 .todo-box:checked::after{content:"";position:absolute;left:4px;top:1.2px;width:4.5px;height:8.5px;
   border:solid var(--accent-tx);border-width:0 1.7px 1.7px 0;transform:rotate(42deg)}

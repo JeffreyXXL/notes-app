@@ -745,6 +745,9 @@ class ImageWidget extends WidgetType {
   private select(view: EditorView): void {
     if (view.state.field(selectedImageField) === this.pos) return;
     view.dispatch({ effects: setSelectedImageEffect.of(this.pos) });
+    // 选中后要能直接按 Delete。点图片时 mousedown 被 preventDefault 了，
+    // 焦点可能还在别处 —— 那样按键根本到不了编辑器
+    view.focus();
   }
 
   private edit(view: EditorView): void {
@@ -962,6 +965,45 @@ export function copySelectedImage(view: EditorView): boolean {
   if (!block) return false;
 
   void copyImageToClipboard(block.src, view.state.field(imageBaseField));
+  return true;
+}
+
+/** Esc：取消图片选中。没选中就返回 false，别把 Esc 吞掉 */
+export function clearSelectedImage(view: EditorView): boolean {
+  if (view.state.field(selectedImageField) < 0) return false;
+  view.dispatch({ effects: setSelectedImageEffect.of(-1) });
+  return true;
+}
+
+/**
+ * 选中图片后按 Delete / Backspace：把这一行整个删掉。
+ *
+ * 只删 `![alt](path)` 那一行（连行尾换行一起），不留空行；文件本身留在
+ * `_assets/` 里 —— 撤销还能回来，而且同一张图可能被别的笔记引用着。
+ *
+ * 返回 false 表示没选中图片，按键照常落到普通删除逻辑上。
+ */
+export function deleteSelectedImage(view: EditorView): boolean {
+  const pos = view.state.field(selectedImageField);
+  if (pos < 0) return false;
+  if (!view.state.selection.main.empty) return false;
+
+  const doc = view.state.doc;
+  const line = doc.lineAt(Math.min(pos, doc.length));
+  if (!view.state.field(imageBlocksField).some(b => b.s === line.number)) return false;
+
+  let from = line.from;
+  let to = line.to;
+  // 连换行一起吃掉：否则删完留下一个空行，光标还在原地
+  if (to < doc.length) to += 1;
+  else if (from > 0) from -= 1;
+
+  view.dispatch({
+    changes: { from, to, insert: '' },
+    selection: { anchor: from },
+    effects: setSelectedImageEffect.of(-1)
+  });
+  view.focus();
   return true;
 }
 
@@ -1285,6 +1327,11 @@ function buildDecorations(view: EditorView): Decorations {
     const text = line.text;
     // 光标所在行露出源码
     const active = focused && reveal && i >= aFrom && i <= aTo;
+    // 光标在这一行的第几列（空选区才算；选了段文字就不露行首标记）。
+    // 行首标记靠它判断「要不要露源码」—— 见下面的 markOn
+    const caretOff = focused && reveal && sel.empty && aFrom === i && aTo === i
+      ? sel.from - line.from
+      : -1;
 
     // 上一行是备注框的末行：给这一行加个上留白，别和框贴在一起
     if (noteGap.has(i)) out.push(lineDeco('cm-todonote-gap').range(line.from));
@@ -1350,11 +1397,18 @@ function buildDecorations(view: EditorView): Decorations {
     let lineCls: string | null = null;
     let m: RegExpExecArray | null;
 
+    // 行首标记（#、>、- [ ]、•、1.）只在光标**贴着标记**时露源码。
+    // 以前是「光标落在这一行任何位置就整行露出来」：点一下待办正文，
+    // 这一行立刻变回 `- [ ] xxx`，跟上下已经渲染好的条目对不上，看着像坏了。
+    // 现在只有光标退到标记上（Home / 左方向键 / 点行首）才露出 `- [ ]`，
+    // 人在正文里写字时，勾选框一直是勾选框
+    const markOn = (len: number) => caretOff >= 0 && caretOff <= len;
+
     m = /^(#{1,6})\s+/.exec(text);
     if (m) {
       lineCls = 'cm-h' + m[1].length;
       skip = m[0].length;
-      if (!active) pushHidden(line.from, line.from + skip);
+      if (!markOn(skip)) pushHidden(line.from, line.from + skip);
     }
 
     if (!lineCls) {
@@ -1362,7 +1416,7 @@ function buildDecorations(view: EditorView): Decorations {
       if (m) {
         lineCls = 'cm-quote';
         skip = m[0].length;
-        if (!active) pushHidden(line.from, line.from + skip);
+        if (!markOn(skip)) pushHidden(line.from, line.from + skip);
       }
     }
 
@@ -1374,13 +1428,11 @@ function buildDecorations(view: EditorView): Decorations {
         const checked = m[3].toLowerCase() === 'x';
         const bodyFrom = line.from + m[0].length;
 
-        // 这一条有没有缩进的备注行。有的话：光标落在任意一行都要整条露源码，
-        // 标题行下面留一道缝（用 padding，不是 margin），行尾也不再显「＋」
+        // 这一条有没有缩进的备注行。有的话标题行下面留一道缝（用 padding，不是 margin），
+        // 行尾也不再显「＋」
         const notes = noteLinesOf.get(i);
-        const itemActive = active
-          || (!!notes && focused && reveal && aTo >= i && aFrom <= notes[notes.length - 1]);
 
-        if (!itemActive) {
+        if (!markOn(m[0].length)) {
           pushReplaced(new TodoWidget(checked, bracket), start, line.from + m[0].length);
 
           // 删除线必须在行内标记之前 push：同一 from 时长范围要先入
@@ -1405,7 +1457,7 @@ function buildDecorations(view: EditorView): Decorations {
       m = /^(\s*)([-*+])\s+/.exec(text);
       if (m) {
         const start = line.from + m[1].length;
-        if (!active) {
+        if (!markOn(m[0].length)) {
           pushReplaced(new MarkerWidget('•', 'cm-bullet'), start, line.from + m[0].length);
         }
         lineCls = 'cm-li';
@@ -1417,7 +1469,9 @@ function buildDecorations(view: EditorView): Decorations {
       m = /^(\s*)(\d+)\.\s+/.exec(text);
       if (m) {
         const numStart = line.from + m[1].length;
-        if (!active) out.push(Decoration.mark({ class: 'cm-olnum' }).range(numStart, numStart + m[2].length + 1));
+        if (!markOn(m[0].length)) {
+          out.push(Decoration.mark({ class: 'cm-olnum' }).range(numStart, numStart + m[2].length + 1));
+        }
         lineCls = 'cm-li';
         skip = m[0].length;
       }

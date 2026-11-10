@@ -8,6 +8,7 @@ import {
   livePreviewPlugin, hitPlugin, tableBlocksField, tableField,
   imageBaseField, imageBlocksField, imageField, setImageBaseEffect,
   selectedImageField, imageSelectPlugin, copySelectedImage,
+  deleteSelectedImage, clearSelectedImage,
   codeBlocksField, codeField, linkPlugin, setLinkHandler
 } from './live-preview';
 import type { LinkKind } from './live-preview';
@@ -26,10 +27,19 @@ const layoutTheme = EditorView.theme({
   '&': { height: '100%' },
   '.cm-scroller': { fontFamily: 'inherit', overflowY: 'auto', overflowX: 'hidden' },
   '.cm-content': {
-    padding: '44px 56px 180px',
-    maxWidth: '842px',
+    // 左右留白走 margin，不走 padding。
+    // 浏览器给「跨多行的选区」算矩形时，用的是**内容框**而不是行框 ——
+    // padding 在里面的话，选区会比行宽多出两侧各 56px，代码块、表格这些
+    // 自带背景的行把中间盖住，只在两侧露出两条色带（就是「代码块选中样式奇怪」）。
+    // 改成 margin 后内容框 = 行框，选区正好压在文字上
+    padding: '44px 0 180px',
+    maxWidth: '730px',
+    // 窗口够宽时固定 730，窄了就两侧各留 56px
+    width: 'calc(100% - 112px)',
+    // 不参与 flex 拉伸，否则窄窗口下 width 会被撑满，两侧留白就没了
+    flexGrow: '0',
+    flexShrink: '1',
     margin: '0 auto',
-    width: '100%',
     boxSizing: 'border-box',
     fontFamily: 'inherit'
   },
@@ -103,6 +113,12 @@ export function mount(
           { key: 'Mod-Shift-h', run: v => { highlightDefault(v); return true; } },
           // 选中图片时 Ctrl+C 复制图片本身，没选中就返回 false 让浏览器复制文字
           { key: 'Mod-c', run: copySelectedImage },
+          // 选中图片时 Delete / Backspace 直接把这张图删掉（整行），
+          // 没选中图片就返回 false，按键照常走普通删除
+          { key: 'Delete', run: deleteSelectedImage },
+          { key: 'Backspace', run: deleteSelectedImage },
+          // Esc 取消图片选中，回到正常编辑
+          { key: 'Escape', run: v => clearSelectedImage(v) },
           // 回车续格式：待办 / 列表 / 引用。不归它管时返回 false，
           // 继续落到下面的 insertNewlineAndIndent
           { key: 'Enter', run: continueMarkup },

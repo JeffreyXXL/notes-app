@@ -135,16 +135,17 @@ A few assertions worth keeping:
 | `preview=cards4 blank0 thumbs1` | Card previews: no blank cards, at least one thumbnail |
 | `crlf="这一行是正文…"` | Excerpts can be extracted from CRLF files too (this one guards a real bug) |
 | `imgEdit=0/1` | Only a **double-click** on an image reverts to the source line |
+| `imgDel=ok {"before":{"sel":1,"imgs":1,"lines":9},"after":{"imgs":0,"lines":8}}` | Select an image, press Delete: the image and its line are gone (line count −1). It used to do nothing — `mousedown` on the image is intercepted, so the editor never got focus and the key never arrived |
 | `imgCopy=ok clip=600x220` | After clicking 复制 in the toolbar, the system clipboard really holds a 600×220 image (read back with Electron's `clipboard.readImage()`). Where the clipboard is unreachable (sandbox / non-interactive session) an extra `clipUnavailable` is printed and only the app-side success is checked |
 | `imgPasteFile=… size=70` | A pasted image really lands on disk |
 | `tagTints=8/8` / `grip=open1 close0` | Tag colors don't collide / `···` opens and closes on click |
 | `code={"blocks":2,"lang":"ts","kw":3,"str":1,"com":1,"fn":1,"tables":0}` | Both code blocks render, the language label is right, keywords / strings / comments / function names are colored; **a table inside a code block is not treated as a table** |
 | `codeClick=1/2` | **A single click drops the cursor into the code block** (one block fewer, two fence lines more). It used to do nothing at all, which users reported as "these lines can't be clicked" |
-| `blockClick=ok {"blocks":0,"fences":2}` | Same thing, verified independently on another note |
+| `codeSel=ok {"widest":[659,1389,730],"line":[659,1389,730],"blend":"multiply","layerKids":3}` | Selecting a whole code block gives a **selection rectangle exactly as wide as the code line** (left 659, right 1389). The content's side gutters used to be `padding`, so the browser measured the selection against the content box — 56px wider on each side. The code line's own background covered the middle, leaving two vertical colour bands visible |
 | `link={"wiki":2,"todo":3,"add":2}` | Two internal links / three todos / two `＋` buttons (the one with an indented note has none) |
 | `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | Clicking a **blank spot** on the link line drops the caret at 11, inside that line (10–25) — a line containing a link still takes the caret |
 | `linkJump="图片测试"` | A **plain click** on `[[图片测试]]` (no modifier) navigates (verified via the selected card in the middle pane) |
-| `version=ok {"verText":"v0.2.0","app":"0.2.0"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
+| `version=ok {"verText":"v0.2.1","app":"0.2.1"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
 | `doc=ok {"dc":{"badge":"PDF","file":"smoke-doc.pdf","size":"8 B","title":"smoke-doc"},"dv":{…},"opened":["_docs/smoke-doc.pdf"],"existed":true,"gone":true}` | Drop a PDF onto the list: the card gets a PDF badge / file name / size, the right pane shows the file panel (打开 + 在文件夹中显示, no formatting bar), double-clicking hands the path to the OS (`doc_open` recorded it), and emptying the trash removes the original from `_docs/` too |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
@@ -161,7 +162,7 @@ A few assertions worth keeping:
 | `noteMulti=ok n=2 first="…cm-todonote-first" last="…cm-todonote-last"` | Two indented note lines form **one** box: the first carries only `-first`, the last only `-last`, both have a background and side borders; clicking the last line puts the caret on it |
 | `noteEnter=ok s1=prevented s2=prevented tail="- [ ] 甲\n  备注一\n  备注二"` | Shift-Enter starts a note line, Enter breaks a line inside the note, indentation carried over — the note is **multi-line** |
 | `noteStyle=ok {"noteLh":27.55,"bodyLh":27.55,"gapPad":"10px"}` | The note's line height measures the same pixel value as the body (it used to be hard-coded at `1.65`, tighter than the body); the line under the box carries `cm-todonote-gap` with `padding-top: 10px` |
-| `plusHit=ok pointerEvents=none` | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
+| `marker=ok {"boxes0":3,"inText":{"boxes":3,"text":"还没写备注的任务＋"},"atMark":{"boxes":2,"text":"- [ ] 还没写备注的任务"}}` | With the caret inside a todo's text, the checkbox stays (3 boxes) and `- [ ]` is invisible; move the caret to the line start, right on the marker, and the checkbox yields to the raw source (2 boxes). It used to flip the whole line back to `- [ ] xxx` on a single click, which made it disagree with the rendered items above and below | | The invisible ＋ at the end of a todo line takes no pointer events, so the last 22px of the line isn't a dead zone |
 | `qbEnd=ok line=- [ ] …Zend` | After clicking the todo button the cursor sits at the end of the line, so typing continues there |
 | `prune oldGone=true newThere=true` | After a rename the old folder (including empty subfolders) is really gone |
 | `titleRename title="代Z码块测试" hasZ=true oldGone=true` | Changing the H1 really renames the file; the old name is gone |
