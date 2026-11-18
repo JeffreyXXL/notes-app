@@ -1193,9 +1193,13 @@ const RULES: Rule[] = [
 /**
  * 处理一行里 skip 之后的部分：先做遮罩占位，避免多个规则互相踩。
  *
- * `lineCaret` 是空光标在这一行里的偏移（不在这一行给 -1）。判断粒度是**每一处标记**
- * 而不是整行：光标落在某一处标记的范围内，就只让那一处露源码，同一行的加粗、高亮、
- * 行内代码照常渲染。早先只要光标在这一行就把所有标记全摊开，改一个字整行闪一下。
+ * `lineCaret` 是空光标在这一行里的偏移（不在这一行给 -1）。判断粒度是**标记字符
+ * 本身**，不是整段、也不是整行：光标压在 `**`、`==`、`` ` `` 这些符号上时，只有
+ * 被压住的那一侧露源码，另一侧照旧藏着；光标落在文字中间时两侧都藏着，`**粗**`
+ * 还是显示成加粗的「粗」。
+ *
+ * 早先的粒度是「光标在这一段里任意位置」就整段摊开，点一下加粗文字就跳出两个
+ * `*`，读起来跟周围渲染好的段落对不上 —— 用户报的就是这个。
  */
 function inline(
   out: Range<Decoration>[],
@@ -1218,12 +1222,15 @@ function inline(
   const mark = (a: number, b: number, cls: string) => {
     if (b > a) out.push(Decoration.mark({ class: cls }).range(base + a, base + b));
   };
+  // 藏掉一段标记，除非光标正压在这段标记上 —— 那就留着让用户看见、能改。
+  // 每条规则左右各调一次，所以「光标压在开头的 `**` 上」只露左边，收尾的
+  // `**` 照样藏着，不会整段跳回源码
   const cut = (a: number, b: number) => {
-    if (b > a) {
-      const d = hideDeco.range(base + a, base + b);
-      out.push(d);
-      atomics.push(d);
-    }
+    if (b <= a) return;
+    if (caret >= a && caret < b) return;
+    const d = hideDeco.range(base + a, base + b);
+    out.push(d);
+    atomics.push(d);
   };
 
   for (const rule of RULES) {
@@ -1233,11 +1240,6 @@ function inline(
       if (!m[0]) { rule.re.lastIndex++; continue; }
       if (!free(m.index, m.index + m[0].length)) continue;
       claim(m.index, m.index + m[0].length);
-      // 光标落在这一处标记**内部**才留源码，其余照常渲染。
-      // 两端不算「里面」：光标紧贴 `**粗**` 的左边或右边时，用户是想在这段前后
-      // 接着写，不是在改这段 —— 此时保持渲染。这也是 atomicRanges 能生效的前提，
-      // 否则光标一贴边界标记就露出来，原子区间当次就没了，方向键会逐字符走进去
-      if (caret > m.index && caret < m.index + m[0].length) continue;
       rule.apply(m, { mark, cut });
     }
   }

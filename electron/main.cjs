@@ -3903,7 +3903,9 @@ function runSmoke() {
             // (d3) 逐处上色：同一行里两处，各自是自己的底色。
             // 光标先离开这一行 —— 光标所在行会露出源码，什么都量不到
             await appendLine('==甲=={green}==乙=={pink}');
-            await keyOf('ArrowUp');
+            // 光标挪到文档开头。以前用 ArrowUp 往上挪一行，落到哪一行全看运气 ——
+            // 万一落在别的高亮行上，读到的就是那一行
+            await js("window.__editor.dispatch({ selection: { anchor: 0 } })");
             await wait(500);
             const two = JSON.parse(String(await js(`(() => {
               const els = [...document.querySelectorAll('#editor-host .cm-hl')];
@@ -3911,7 +3913,9 @@ function runSmoke() {
                 const e = els.find(x => x.textContent === t);
                 return e ? { cls: e.className, bg: getComputedStyle(e).backgroundColor } : null;
               };
-              const line = (els[0] && els[0].closest('.cm-line')) || null;
+              // 按内容反查行，别取「第一个 .cm-hl」—— 文档里前面还有别的高亮
+              const row = els.find(x => x.textContent === '甲');
+              const line = row ? row.closest('.cm-line') : null;
               return JSON.stringify({
                 a: pick('甲'), b: pick('乙'),
                 // 这一行渲染出来应该就是「甲乙」两个色带，标记和色号都被藏掉
@@ -3948,13 +3952,13 @@ function runSmoke() {
             };
 
             const clicked = await tapEl('#editor-host .cm-hl-green');
-            // 光标进了这一行，行会露出源码，正好能读到原文
-            const rawLine = String(await js(`(()=>{
-              const s = getSelection();
-              const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
-              const line = el && el.closest ? el.closest('.cm-line') : null;
-              return line ? line.textContent : '';
-            })()`));
+            // 读**文档**里的原文，不读 DOM 文本：光标压在标记上时 DOM 会多出 `==`，
+            // 压在文字里时又少掉，两种都不适合拿来比对色号
+            const lineAtCaret = `(()=>{
+              const ed = window.__editor;
+              return ed.state.doc.lineAt(ed.state.selection.main.head).text;
+            })()`;
+            const rawLine = String(await js(lineAtCaret));
 
             const dots = JSON.parse(String(await js(`(() => {
               const b = document.querySelector('[data-qb="hl"]');
@@ -3972,13 +3976,11 @@ function runSmoke() {
               const d = document.querySelector('.qb-pal .qb-dot[data-c="purple"]');
               if (!d) return '{"err":"nodot"}';
               d.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-              const s = getSelection();
-              const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
-              const line = el && el.closest ? el.closest('.cm-line') : null;
+              const ed = window.__editor;
               return JSON.stringify({
                 attr: document.documentElement.getAttribute('data-hl'),
                 pal: !!document.querySelector('.qb-pal'),
-                line: line ? line.textContent : ''
+                line: ed.state.doc.lineAt(ed.state.selection.main.head).text
               });
             })()`)));
             // 光标挪开这一行才会渲染成色带
@@ -4008,6 +4010,10 @@ function runSmoke() {
           // (d5) 空光标按色板：只插一对空的 `==|==`，正文里不能多出「高亮」两个字。
           // 以前这里插的是 `==高亮==` 并把「高亮」框成选区，一按色板就凭空多俩字
           try {
+            const lineAtCaret = `(()=>{
+              const ed = window.__editor;
+              return ed.state.doc.lineAt(ed.state.selection.main.head).text;
+            })()`;
             await appendLine('');
             const pal = JSON.parse(String(await js(`(() => {
               const b = document.querySelector('[data-qb="hl"]');
@@ -4021,12 +4027,9 @@ function runSmoke() {
             await wait(250);
             await typeText('Zz');
             await wait(400);
-            const hlEmptyLine = String(await js(`(()=>{
-              const s = getSelection();
-              const el = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
-              const line = el && el.closest ? el.closest('.cm-line') : null;
-              return line ? line.textContent : '';
-            })()`));
+            // 读文档原文：光标正压在收尾的 `==` 上，DOM 里会露出 `=={orange}`，
+            // 拿 DOM 文本比对永远对不上
+            const hlEmptyLine = String(await js(lineAtCaret));
             hlEmptyOk = pal.ok === 1 && hlEmptyLine.includes('==Zz==')
               && !hlEmptyLine.includes('高亮');
             console.log('SMOKE hlEmpty=' + (hlEmptyOk ? 'ok' : 'bad') +
@@ -4064,18 +4067,20 @@ function runSmoke() {
                 pink: !!ln.querySelector('.cm-hl-pink')
               });
             })()`);
-            // -1 = 「和」后面（两处高亮之外）；4 = 「甲」上面（第一处里面）
+            // -1 = 「和」后面（两处高亮之外）；3 = 压在开头那两个 `=` 上
+            // 光标在文字里（含正文开头「甲」前）时两侧都该藏着，只有真压到符号上才露
             await putCaret(-1);
             await wait(400);
             const mid = JSON.parse(String(await snap()));
-            await putCaret(4);
+            await putCaret(3);
             await wait(400);
-            const inside = JSON.parse(String(await snap()));
+            const onMark = JSON.parse(String(await snap()));
             hlNodeOk = mid.green && mid.pink && !mid.text.includes('==')
-              && inside.pink && !inside.green
-              && inside.text.includes('==甲==') && !inside.text.includes('==乙==');
+              // 第一处露出 `==`，但仍是高亮（只是标记可见）；第二处完全不受影响
+              && onMark.green && onMark.text.includes('==甲')
+              && !onMark.text.includes('==乙');
             console.log('SMOKE hlNode=' + (hlNodeOk ? 'ok' : 'bad') +
-              ' mid=' + JSON.stringify(mid) + ' inside=' + JSON.stringify(inside));
+              ' mid=' + JSON.stringify(mid) + ' onMark=' + JSON.stringify(onMark));
             for (let i = 0; i < 2; i++) {
               win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
               win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
@@ -4093,7 +4098,9 @@ function runSmoke() {
             const base = JSON.parse(String(await js(`(() => {
               const ed = window.__editor;
               const line = ed.state.doc.lineAt(ed.state.selection.main.head);
-              ed.dispatch({ selection: { anchor: line.from + 3 } });
+              // 站到正文开头（两个星号之后）。站在星号前面的话标记会露出来，
+              // 那一侧就不再是原子区间，验的就不是「跳过隐藏标记」了
+              ed.dispatch({ selection: { anchor: line.from + 5 } });
               return JSON.stringify({ from: line.from, text: line.text });
             })()`)));
             await wait(350);
@@ -4102,7 +4109,7 @@ function runSmoke() {
               const c = document.querySelector('#editor-host .cm-content');
               c.focus();
               const ev = new KeyboardEvent('keydown', {
-                key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39,
+                key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, which: 37,
                 bubbles: true, cancelable: true
               });
               c.dispatchEvent(ev);
@@ -4111,12 +4118,29 @@ function runSmoke() {
             await wait(400);
             const col = Number(await js(
               `(() => window.__editor.state.selection.main.head - ${base.from})()`));
-            // 3 -> 5：跳过 `**`（区间 [3,5]）。没有 atomicRanges 会停在 4
-            atomicOk = base.text === 'ZZa**粗**' && col === 5;
+            // 5 -> 3：跳过藏起来的 `**`（区间 [3,5]）。没有 atomicRanges 会停在 4
+            // 再把光标压到 `**` 上，那一侧就该露出源码 —— 两件事合起来才是完整的行为：
+            // 不压在符号上时标记隐形且原子，压上去才可见、可逐字符编辑
+            await js(`window.__editor.dispatch({ selection: { anchor: ${base.from} + 4 } })`);
+            await wait(400);
+            const shown = String(await js(`(()=>{
+              const ln = [...document.querySelectorAll('#editor-host .cm-line')]
+                .find(l => l.textContent.includes('ZZa'));
+              return ln ? ln.textContent : '';
+            })()`));
+            atomicOk = base.text === 'ZZa**粗**' && col === 3 && shown.includes('**');
             console.log('SMOKE atomic=' + (atomicOk ? 'ok' : 'bad') +
-              ' text=' + JSON.stringify(base.text) + ' col=' + col + ' key=' + handled);
+              ' text=' + JSON.stringify(base.text) + ' col=' + col +
+              ' key=' + handled + ' shown=' + JSON.stringify(shown));
+            // 撤掉这一行测试文字（appendLine 是一次 change，一次 undo 就够）。
+            // 留着的话后面那条断言按 Enter 正好落在星号中间，会把 `**` 劈成两行，
+            // 链接写出来就多出两个星号
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
+            await wait(400);
           } catch (err) {
-            console.log('SMOKE atomicFailed=' + err.message);
+            console.log('SMOKE atomicFailed=' + err.message + ' @ ' +
+              String(err && err.stack || '').split('\n').slice(0, 3).join(' / '));
           }
 
           // (e) 笔记链接：默认写成 `[[目录/标题]]`，关掉开关只剩 `[[标题]]`；

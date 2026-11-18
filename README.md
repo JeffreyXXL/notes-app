@@ -145,7 +145,7 @@ A few assertions worth keeping:
 | `link={"wiki":2,"todo":3,"add":2}` | Two internal links / three todos / two `＋` buttons (the one with an indented note has none) |
 | `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | Clicking a **blank spot** on the link line drops the caret at 11, inside that line (10–25) — a line containing a link still takes the caret |
 | `linkJump="图片测试"` | A **plain click** on `[[图片测试]]` (no modifier) navigates (verified via the selected card in the middle pane) |
-| `version=ok {"verText":"v0.2.1","app":"0.2.1"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
+| `version=ok {"verText":"v0.2.2","app":"0.2.2"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
 | `doc=ok {"dc":{"badge":"PDF","file":"smoke-doc.pdf","size":"8 B","title":"smoke-doc"},"dv":{…},"opened":["_docs/smoke-doc.pdf"],"existed":true,"gone":true}` | Drop a PDF onto the list: the card gets a PDF badge / file name / size, the right pane shows the file panel (打开 + 在文件夹中显示, no formatting bar), double-clicking hands the path to the OS (`doc_open` recorded it), and emptying the trash removes the original from `_docs/` too |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
@@ -153,9 +153,8 @@ A few assertions worth keeping:
 | `hlPal=ok on=green raw="==甲=={green}==乙=={pink}" now="==甲=={purple}==乙=={pink}"` | Right-click recolour of an existing highlight: **only the colour id changes**, the number of `==` is identical (one highlight never gets split into two) |
 | `hlEmpty=ok line="==Zz=={orange}…"` | An empty caret plus a colour dot inserts an empty pair only — typing gives `==Zz==`, and **no 「高亮」 placeholder lands in the note** |
 | `imgClick2=ok back=1/0 1st=1/0 2nd=0/1` | The first click only selects the image; a **second click** enters source. A single click used to never produce a caret |
-| `hlNode=ok mid={"text":"ZZ甲 和 乙","green":true,"pink":true}` | With the caret **between** two highlights, both stay rendered (`!text.includes('==')`) |
-| `hlNode inside={"text":"ZZ==甲=={green} 和 乙","green":false,"pink":true}` | With the caret inside the first one, **only that one** shows source; the second stays a coloured band |
-| `atomic=ok text="ZZa**粗**" col=5 key=handled` | One ArrowRight from after `a` **skips the whole `**`** and lands before 粗 (3→5); without atomic ranges it stops at 4, where nothing is visible |
+| `hlNode=ok mid={"text":"ZZ甲 和 乙","green":true,"pink":true} onMark={"text":"ZZ==甲 和 乙",...}` | With the caret anywhere **between or inside** the text, both highlights stay rendered and not a single `==` reaches the DOM; only when the caret sits on the opening pair of `=` does that one highlight show its source, and the second stays a clean coloured band |
+| `atomic=ok text="ZZa**粗**" col=3 key=handled shown="ZZa**粗"` | One ArrowLeft from the start of the text **skips the hidden `**`** and lands in front of it (5→3); move the caret onto the stars and `**` appears (`shown` contains it) — invisible markers are atomic, markers under the caret are visible and editable character by character |
 | `imgCaret=ok drift=0 posAt=86 head=86 range=85-98` | For the paragraph under an image: CM's line top matches the DOM (`drift=0`), looking a position up by coordinates finds that line (`posAt`), and a real click puts the caret there (`head`). All three fail when a block widget uses `margin` for spacing |
 | `collapse=ok cls="app" l=238 m=342` | Both left panes are expanded on startup (`.app` carries neither `no-left` nor `no-mid`, and both have real width) |
 | `todoArrow=ok` | The arrow is no longer syntax: zero `.cm-todo-note` / `.cm-todo-arrow` in the note, the `→` line renders as plain text (`textContent` contains `→`), only the indented one is boxed, and the trailing `＋` shows on exactly the two todos without a note |
@@ -203,13 +202,14 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   `==|==` with the caret in the middle — it never writes a placeholder word into your note.
   The default pen lives in Settings → Appearance → Highlight and is
   what the button and the shortcut use.
-- **Source is revealed per span, not per line.** Putting the caret inside `**bold**` or `==highlight==` reverts only that
-  span; other markup on the same line keeps rendering — editing one word no longer makes the whole line flash into source.
-  Line-level markers (`#`, `- `, `> `, `- [ ] `) are the exception: they are line semantics, so the caret anywhere on the
-  line reveals them.
-- **Hidden markers are transparent *and* unstoppable for the cursor**: one ArrowRight skips the whole `**` instead of
-  parking between two invisible asterisks. Otherwise the caret stalls where nothing is drawn, which reads as "these lines
-  won't take a cursor".
+- **Source is revealed per marker character, not per span.** Only the side the caret actually sits on shows its
+  `**`, `==` or backtick; with the caret anywhere in the text — after a click, or while typing at either end — both sides
+  stay hidden and `**bold**` still reads as bold. Other markup on the same line is untouched, so editing one word no
+  longer makes the whole line flash into source. Line-level markers (`#`, `- `, `> `, `- [ ] `) follow the same rule:
+  the caret has to sit on those characters.
+- **Hidden markers are atomic for the cursor**: one arrow key skips the whole `**` instead of parking between two
+  invisible asterisks. Put the caret on the asterisks and that side appears, editable character by character — there is
+  no "click in first to see the source" step.
 - **Enter continues the format.** At the end of a task line (`- [ ] `), a list item (`- ` / `1. `) or a quote (`> `),
   Enter starts the next line with the same marker: ordered lists increment, new todos always start unchecked, indentation
   is carried over. Press Enter again on an empty item and the marker is dropped, so you get a plain paragraph back
@@ -292,7 +292,8 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   ```
 
 - To edit a link, click a **blank spot on the same line** (anywhere outside the link), then walk into it with the arrow
-  keys — once the caret is inside the link text that one span shows `[[...]]` source and you can change it.
+  keys — the `[[` or `]]` shows up only once the caret sits on those brackets, and then you can change it. With the caret
+  in the text the link keeps rendering, so a plain click still navigates.
   It used to be the other way round (plain click only placed the caret, `Ctrl+click` navigated), which made links feel
   unclickable — the most common action was hidden behind a modifier.
 - `[[title]]` matches in stages: relative to the current note's folder → vault path → same filename → same title → title contains
@@ -306,7 +307,7 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   "it opened but I can't see it".
 - When nothing matches you get a light toast ("没有找到「xxx」这篇笔记" — no such note), not silence.
 - The quick bar has two link buttons: one inserts an external link `[text](url)`, one inserts an internal link `[[folder/note name]]`.
-- To edit the link text: click the link itself — the caret lands in the text and that span reverts to `[[…]]` source (other markup on the line is unaffected).
+- To edit a link: move the caret onto the `[[` or `]]` (click the empty part of the line, then arrow over) and that side of the bracket appears. With the caret in the link text it keeps rendering as a blue link you can click.
 
 **Todo notes**
 - A note goes **under** the todo, indented two spaces (or one tab), and can be as many lines as you like:
