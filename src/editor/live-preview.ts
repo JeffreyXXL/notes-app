@@ -153,6 +153,32 @@ function splitRow(text: string): string[] {
   return s.split('|').map(c => c.trim());
 }
 
+/**
+ * 一行表格里每个单元格在**原文**中的位置（两侧空白已经削掉）。
+ * 切法和 splitRow 一致，只是额外留下偏移 —— 单元格要能就地编辑，
+ * 得知道自己对应文档里的哪一段。
+ */
+function cellSpans(text: string): Array<{ from: number; to: number }> {
+  const out: Array<{ from: number; to: number }> = [];
+  const n = text.length;
+  let i = 0;
+  while (i < n && text[i] !== '|') i++;
+  if (i < n) i++;                       // 跳过开头的 `|`
+  while (i <= n) {
+    const start = i;
+    while (i < n && text[i] !== '|') i++;
+    let a = start;
+    let b = i;
+    while (a < b && /\s/.test(text[a])) a++;
+    while (b > a && /\s/.test(text[b - 1])) b--;
+    out.push({ from: a, to: b });
+    if (i >= n) break;
+    i++;                                // 跳过这个 `|`
+    if (i >= n) break;                  // 结尾的 `|` 后面没东西了
+  }
+  return out;
+}
+
 function alignOf(cell: string): Align {
   const c = cell.trim();
   const left = c.startsWith(':');
@@ -250,11 +276,13 @@ class TableWidget extends WidgetType {
     readonly head: string[],
     readonly body: string[][],
     readonly aligns: Align[],
-    readonly pos: number
+    readonly pos: number,
+    readonly rows: string[]
   ) { super(); }
   override eq(o: TableWidget): boolean {
     return this.pos === o.pos
-      && JSON.stringify([this.head, this.body, this.aligns]) === JSON.stringify([o.head, o.body, o.aligns]);
+      && this.rows.length === o.rows.length
+      && this.rows.every((t, i) => t === o.rows[i]);
   }
   override toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement('div');
@@ -262,12 +290,111 @@ class TableWidget extends WidgetType {
     const table = document.createElement('table');
     const al = (i: number) => this.aligns[i] || 'l';
 
+    // 第 r 行（0 = 表头，1 = 分隔行，2 起是数据行）在文档里的起点
+    const rowFrom = (r: number): number => {
+      let at = this.pos;
+      for (let k = 0; k < r && k < this.rows.length; k++) at += this.rows[k].length + 1;
+      return at;
+    };
+
+    /**
+     * 单元格就地编辑。
+     *
+     * 打字过程中**不碰文档** —— 一 dispatch，这张表就会因为 docChanged 重建，
+     * 光标当场丢掉，每敲一个字都要重新点一下。所以只在失焦 / 回车 / Tab
+     * 的时候把整格内容一次性写回去。
+     *
+     * 点单元格也不能让事件冒到容器上：那里挂着「单击进源码」，
+     * 一进去整张表就散成 `| a | b |`，正是用户报的「点一下就变原型」。
+     */
+    const bindCell = (cell: HTMLElement, r: number, c: number) => {
+      const spanOf = () => cellSpans(this.rows[r] ?? '')[c] ?? null;
+      const rawText = (): string => {
+        const sp = spanOf();
+        if (!sp) return '';
+        return view.state.doc.sliceString(rowFrom(r) + sp.from, rowFrom(r) + sp.to);
+      };
+
+      cell.contentEditable = 'plaintext-only';
+      cell.spellcheck = false;
+      cell.classList.add('cm-cell');
+      // 提交会让表格重建，重建后靠行列号把焦点找回来
+      cell.dataset.r = String(r);
+      cell.dataset.c = String(c);
+
+      cell.addEventListener('mousedown', e => e.stopPropagation());
+      cell.addEventListener('mouseup', e => e.stopPropagation());
+      cell.addEventListener('click', e => { e.stopPropagation(); cell.focus(); });
+      // 键盘也不能冒泡到 contentDOM：那边挂着 CodeMirror 的 keymap，
+      // 回车会被当成「在文档里插一行」
+      cell.addEventListener('keydown', e => e.stopPropagation());
+
+      cell.addEventListener('focus', () => {
+        // 编辑时给原始 markdown 文本。渲染后的 textContent 是纯文本，
+        // 直接写回去会把格子里的 `**粗体**`、行内代码的标记吃掉
+        const raw = rawText();
+        if (cell.textContent !== raw) {
+          cell.textContent = raw;
+          const range = document.createRange();
+          range.selectNodeContents(cell);
+          range.collapse(false);
+          const s = getSelection();
+          if (s) { s.removeAllRanges(); s.addRange(range); }
+        }
+      });
+
+      const commit = () => {
+        // widget 已经因为别处的修改重建过了，这个 cell 是旧 DOM，别再去写文档
+        if (!cell.isConnected) return;
+        const sp = spanOf();
+        if (!sp) return;
+        const from = rowFrom(r) + sp.from;
+        const to = rowFrom(r) + sp.to;
+        const next = (cell.textContent ?? '').replace(/\s*\n\s*/g, ' ').trim();
+        if (view.state.doc.sliceString(from, to) === next) return;
+        view.dispatch({ changes: { from, to, insert: next } });
+      };
+
+      cell.addEventListener('blur', (e: FocusEvent) => {
+        // 焦点要是落到了同一张表的另一格，提交完得把焦点还给那一格 ——
+        // 提交会重建整张表，浏览器刚给出去的焦点跟着旧 DOM 一起没了，
+        // 表现就是「点第二格没反应，得再点一下」
+        const next = (e.relatedTarget as HTMLElement | null)?.closest?.('.cm-cell') as HTMLElement | null;
+        const nr = next?.dataset.r;
+        const nc = next?.dataset.c;
+        commit();
+        if (nr != null && nc != null) {
+          requestAnimationFrame(() => {
+            const el = document.querySelector(
+              `.cm-table .cm-cell[data-r="${nr}"][data-c="${nc}"]`) as HTMLElement | null;
+            el?.focus();
+          });
+        }
+      });
+      cell.addEventListener('keydown', e => {
+        // 输入法正在选词时，回车是「上屏」不是「提交」，别打断人家
+        if (e.isComposing) return;
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cell.textContent = rawText();
+          cell.blur();
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          commit();
+          cell.blur();
+        }
+      });
+    };
+
     const thead = document.createElement('thead');
     const hr = document.createElement('tr');
     this.head.forEach((c, i) => {
       const th = document.createElement('th');
       th.className = 'ta-' + al(i);
       th.innerHTML = cellHtml(c);
+      bindCell(th, 0, i);
       hr.appendChild(th);
     });
     thead.appendChild(hr);
@@ -275,21 +402,23 @@ class TableWidget extends WidgetType {
 
     if (this.body.length) {
       const tbody = document.createElement('tbody');
-      for (const row of this.body) {
+      this.body.forEach((row, ri) => {
         const tr = document.createElement('tr');
         // 按表头列数补齐 / 截断，避免参差
         for (let i = 0; i < this.head.length; i++) {
           const td = document.createElement('td');
           td.className = 'ta-' + al(i);
           td.innerHTML = cellHtml(row[i] ?? '');
+          bindCell(td, ri + 2, i);
           tr.appendChild(td);
         }
         tbody.appendChild(tr);
-      }
+      });
       table.appendChild(tbody);
     }
 
     wrap.appendChild(table);
+    // 表格上下那圈留白仍然是「进源码改结构」的入口（加行、改对齐、改列数）
     clickToEdit(wrap, view, this.pos);
 
     return wrap;
@@ -304,7 +433,15 @@ class TableWidget extends WidgetType {
    所以表格单独放一个 StateField，ViewPlugin 只管光标在块内时的源码样式。
    ============================================================ */
 
-interface TableBlock { s: number; e: number; head: string[]; body: string[][]; aligns: Align[]; }
+interface TableBlock {
+  s: number;
+  e: number;
+  head: string[];
+  body: string[][];
+  aligns: Align[];
+  /** 每一行的原文（表头、分隔行、数据行都在里面），单元格定位靠它 */
+  rows: string[];
+}
 
 function collectTables(state: EditorState): TableBlock[] {
   const doc = state.doc;
@@ -326,7 +463,9 @@ function collectTables(state: EditorState): TableBlock[] {
     const aligns = splitRow(doc.line(sepLine).text).map(alignOf);
     const body: string[][] = [];
     for (let k = sepLine + 1; k <= e; k++) body.push(splitRow(doc.line(k).text));
-    out.push({ s: i, e, head, body, aligns });
+    const rows: string[] = [];
+    for (let k = i; k <= e; k++) rows.push(doc.line(k).text);
+    out.push({ s: i, e, head, body, aligns, rows });
     i = e;
   }
   return out;
@@ -348,11 +487,12 @@ function buildTables(state: EditorState): DecorationSet {
   const out: Range<Decoration>[] = [];
 
   for (const b of state.field(tableBlocksField)) {
-    // 光标在块内：露出源码好编辑
+    // 光标在块内（键盘走进去的）：露出源码好改结构。
+    // 鼠标点单元格不走这条路 —— 那边是就地编辑，不设选区，表格保持渲染
     if (aFrom <= b.e && aTo >= b.s) continue;
     const from = doc.line(b.s).from;
     out.push(Decoration.replace({
-      widget: new TableWidget(b.head, b.body, b.aligns, from),
+      widget: new TableWidget(b.head, b.body, b.aligns, from, b.rows),
       block: true
     }).range(from, doc.line(b.e).to));
   }

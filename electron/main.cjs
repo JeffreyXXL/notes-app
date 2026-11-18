@@ -1300,6 +1300,8 @@ function runSmoke() {
         // 第 55 轮：行内标记按「每一处」判断（不是整行），以及光标跳过被藏掉的标记
         let hlNodeOk = false;
         let atomicOk = false;
+        // 第 64 轮：表格单元格就地编辑，点进去不再整张表散成源码
+        let tblCellOk = false;
         // 第 56 轮：图片异步解码后要重新测量（否则下面每一行的坐标全偏）、
         // 启动时左两栏默认摊开、待办备注改成下方独立的框
         let imgCaretOk = false;
@@ -1607,6 +1609,39 @@ function runSmoke() {
               const back = await js("document.querySelectorAll('.cm-table').length");
               console.log('SMOKE tableBack=widget' + back);
             }
+
+            // 单元格就地编辑：点进去改字，表格还是表格
+            const cell = JSON.parse(String(await js(`(()=>{
+              const c = document.querySelector('.cm-table tbody td, .cm-table thead th');
+              if (!c) return JSON.stringify({ err: 'nocell' });
+              const before = window.__editor.state.doc.toString();
+              c.focus();
+              const editable = c.isContentEditable;
+              c.textContent = 'TBLX';
+              c.blur();
+              return JSON.stringify({ before, editable });
+            })()`)));
+            if (cell.err) throw new Error(cell.err);
+            await wait(800);
+            const cellAfter = JSON.parse(String(await js(`(()=>JSON.stringify({
+              doc: window.__editor.state.doc.toString(),
+              widgets: document.querySelectorAll('.cm-table').length,
+              src: document.querySelectorAll('#editor-host .cm-line.cm-tbl').length,
+              focused: !!document.querySelector('.cm-table .cm-cell:focus')
+            }))()`)));
+            tblCellOk = cell.editable === true
+              && !cell.before.includes('TBLX')
+              && cellAfter.doc.includes('TBLX')
+              && cellAfter.widgets === 1 && cellAfter.src === 0;
+            console.log('SMOKE tblCell=' + (tblCellOk ? 'ok' : 'bad') + ' ' + JSON.stringify({
+              editable: cell.editable, widgets: cellAfter.widgets, src: cellAfter.src,
+              hit: cellAfter.doc.includes('TBLX')
+            }));
+            // 撤掉这格改动，别把后面的断言带歪
+            await js("window.__editor.focus()");
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] });
+            await wait(500);
           }
         } catch (err) {
           console.log('SMOKE tableEditFailed=' + err.message);
@@ -4233,7 +4268,7 @@ function runSmoke() {
           && railOk && newNoteCtxOk && enterOk && hlOk && wikiPathOk && crumbOk
           && hlColorOk && hlPalOk && tabOk && imgCopyOk
           && hlEachOk && plusHitOk
-          && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk
+          && hlEmptyOk && imgClick2Ok && hlNodeOk && atomicOk && tblCellOk
           && imgCaretOk && collapseOk && todoArrowOk && noteMultiOk && noteStyleOk && noteEnterOk
           && markerOk && imgDelOk
           && dragBarOk && qbCaretOk && qbSelOk && qbEndOk && keepScrollOk;
@@ -4244,7 +4279,7 @@ function runSmoke() {
           hideOk, lockOk, appNameOk, versionOk, docOk, thumbRowOk, figsOk, placeholderOk, railOk,
           newNoteCtxOk, enterOk, hlOk, wikiPathOk, crumbOk, hlColorOk, hlPalOk,
           hlEachOk, plusHitOk, hlEmptyOk, imgClick2Ok,
-          hlNodeOk, atomicOk, imgCaretOk, collapseOk, todoArrowOk,
+          hlNodeOk, atomicOk, tblCellOk, imgCaretOk, collapseOk, todoArrowOk,
           noteMultiOk, noteStyleOk, noteEnterOk, markerOk, imgDelOk,
           tabOk, imgCopyOk, dragBarOk, qbCaretOk, qbSelOk, qbEndOk, keepScrollOk
         }));

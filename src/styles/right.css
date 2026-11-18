@@ -82,6 +82,13 @@ html[data-theme="dark"] #editor-host .cm-selectionLayer{mix-blend-mode:screen}
 .cm-table tbody tr:hover td{background:var(--hover-soft)}
 .cm-table .ta-c{text-align:center}
 .cm-table .ta-r{text-align:right}
+/* 单元格就地编辑：点进去直接改字，表格本身不动
+   以前是「点一下整张表散成 | a | b |」，改一个字要先看一堆竖线 */
+.cm-table .cm-cell{cursor:text;outline:none;border-radius:5px;
+  transition:background .12s,box-shadow .12s}
+.cm-table .cm-cell:hover{background:color-mix(in srgb, var(--link) 5%, transparent)}
+.cm-table .cm-cell:focus{background:color-mix(in srgb, var(--link) 9%, transparent);
+  box-shadow:0 0 0 1.5px color-mix(in srgb, var(--link) 42%, transparent)}
 .cm-table code{font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:.88em;
   background:var(--code-bg);padding:1px 4px;border-radius:3px;color:var(--code-tx)}
 .cm-table strong{font-weight:650;color:var(--t1)}

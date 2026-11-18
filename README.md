@@ -145,7 +145,7 @@ A few assertions worth keeping:
 | `link={"wiki":2,"todo":3,"add":2}` | Two internal links / three todos / two `＋` buttons (the one with an indented note has none) |
 | `wikiClick={"before":0,"after":11,"line":{"n":4,"from":10,"to":25}}` | Clicking a **blank spot** on the link line drops the caret at 11, inside that line (10–25) — a line containing a link still takes the caret |
 | `linkJump="图片测试"` | A **plain click** on `[[图片测试]]` (no modifier) navigates (verified via the selected card in the middle pane) |
-| `version=ok {"verText":"v0.2.2","app":"0.2.2"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
+| `version=ok {"verText":"v0.2.3","app":"0.2.3"}` | The version shown in Settings → 数据 matches `package.json` (`app.getVersion()`) |
 | `doc=ok {"dc":{"badge":"PDF","file":"smoke-doc.pdf","size":"8 B","title":"smoke-doc"},"dv":{…},"opened":["_docs/smoke-doc.pdf"],"existed":true,"gone":true}` | Drop a PDF onto the list: the card gets a PDF badge / file name / size, the right pane shows the file panel (打开 + 在文件夹中显示, no formatting bar), double-clicking hands the path to the OS (`doc_open` recorded it), and emptying the trash removes the original from `_docs/` too |
 | `cardPath all="技术 / 子目录" lv1="子目录" lv2=""` | The card path shortens level by level and disappears when there is nothing below |
 | `leftOrder=技术,收集箱 -> 收集箱,技术 saved=["收集箱",…]` | Folder drag reordering, persisted to the settings file |
@@ -156,6 +156,7 @@ A few assertions worth keeping:
 | `hlNode=ok mid={"text":"ZZ甲 和 乙","green":true,"pink":true} onMark={"text":"ZZ==甲 和 乙",...}` | With the caret anywhere **between or inside** the text, both highlights stay rendered and not a single `==` reaches the DOM; only when the caret sits on the opening pair of `=` does that one highlight show its source, and the second stays a clean coloured band |
 | `atomic=ok text="ZZa**粗**" col=3 key=handled shown="ZZa**粗"` | One ArrowLeft from the start of the text **skips the hidden `**`** and lands in front of it (5→3); move the caret onto the stars and `**` appears (`shown` contains it) — invisible markers are atomic, markers under the caret are visible and editable character by character |
 | `imgCaret=ok drift=0 posAt=86 head=86 range=85-98` | For the paragraph under an image: CM's line top matches the DOM (`drift=0`), looking a position up by coordinates finds that line (`posAt`), and a real click puts the caret there (`head`). All three fail when a block widget uses `margin` for spacing |
+| `tblCell=ok {"editable":true,"widgets":1,"src":0,"hit":true}` | Clicking a table cell makes it editable (`contentEditable`); the text is written back on blur, and the table **stays** a widget (`widgets:1`) with not one line of source showing (`src:0`). It used to scatter the whole table into `\| a \| b \|` on a single click |
 | `collapse=ok cls="app" l=238 m=342` | Both left panes are expanded on startup (`.app` carries neither `no-left` nor `no-mid`, and both have real width) |
 | `todoArrow=ok` | The arrow is no longer syntax: zero `.cm-todo-note` / `.cm-todo-arrow` in the note, the `→` line renders as plain text (`textContent` contains `→`), only the indented one is boxed, and the trailing `＋` shows on exactly the two todos without a note |
 | `noteMulti=ok n=2 first="…cm-todonote-first" last="…cm-todonote-last"` | Two indented note lines form **one** box: the first carries only `-first`, the last only `-last`, both have a background and side borders; clicking the last line puts the caret on it |
@@ -265,7 +266,13 @@ The final `verdict={...}` line prints all of those booleans — if one goes red,
   and between columns, no zebra striping.
 - Alignment syntax works: `:---` left, `:---:` center, `---:` right.
 - Cells support `` `code` ``, **bold**, *italic*, ~~strikethrough~~ and links.
-- **A single click on the table** puts the cursor in and the whole block reverts to Markdown source; click elsewhere to render again.
+- **Click a cell and type — the table stays a table.** The cell gets a faint blue ring while it is active; press
+  Enter / Tab or click away and the text is written back. It used to flip the whole block into `| a | b |` on a single
+  click, so changing one word meant staring at a screenful of pipes.
+- While a cell is being edited it shows its raw text (`**bold**` with the asterisks), so formatting survives the round
+  trip; Esc throws away the edit to that one cell.
+- To change the **structure** — add a row, change the column count or the alignment — click the padding above or below
+  the table to get the source, then click away to render it again.
 - Text inside a table can be drag-selected and copied (dragging does not trigger editing).
 
 **Code blocks**
